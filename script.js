@@ -49,6 +49,8 @@ const MINI_GAME_BULLET_SPEED = 760;
 const MINI_GAME_GOBLIN_SPEED = 38;
 const MINI_GAME_GOBLIN_SPAWN_MS = 1080;
 const MINI_GAME_DEATH_ANIMATION_MS = 420;
+const MINI_GAME_SMOKE_DEATH_GAP_MS = 10000;
+const MINI_GAME_SMOKE_DEATH_BLAST_RADIUS = 112;
 const MINI_GAME_DIFFICULTY_RAMP_MS = 60000;
 const MINI_GAME_OBSTACLE_COUNT = 8;
 const MINI_GAME_OBSTACLE_HEALTH = 5;
@@ -70,6 +72,15 @@ const MINI_GAME_FAIRY_BOMB_RADIUS = 108;
 const MINI_GAME_FROG_EVENT_START_MS = 18000;
 const MINI_GAME_FROG_EVENT_GAP_MS = 19000;
 const MINI_GAME_MAX_FROG_EVENTS = 2;
+const MINI_GAME_VOLCANO_START_MS = 15000;
+const MINI_GAME_FINAL_VOLCANO_START_MS = 45000;
+const MINI_GAME_VOLCANO_DURATION_MS = 10000;
+const MINI_GAME_VOLCANO_ROCK_INTERVAL_MS = 1250;
+const MINI_GAME_FAIRY_HUT_START_MS = 30000;
+const MINI_GAME_FAIRY_SPAWN_MS = 2000;
+const MINI_GAME_MAX_HELPER_FAIRIES = 5;
+const MINI_GAME_TIKI_START_MS = 40000;
+const MINI_GAME_TIKI_SPAWN_MS = 1500;
 const MINI_GAME_INTRO_FADE_MS = 700;
 const MINI_GAME_INSTRUCTION_SEQUENCE_MS = 11800;
 const TEST_START_AT_MINI_GAME_INTRO = true;
@@ -122,6 +133,18 @@ const miniGameState = {
   appleSplatters: [],
   lake: null,
   frogs: [],
+  smokeDeaths: [],
+  herbBursts: [],
+  volcano: null,
+  volcanoWave: 0,
+  lavaRocks: [],
+  lavaSnakes: [],
+  lavaPools: [],
+  fairyHut: null,
+  helperFairies: [],
+  tikiMen: [],
+  droppedSpears: [],
+  magicBursts: [],
   trails: [],
   shells: [],
   goldenAppleSpawnTimes: [],
@@ -131,6 +154,8 @@ const miniGameState = {
   lastFireTime: -MINI_GAME_FIRE_COOLDOWN_MS,
   lastSpawnTime: 0,
   lastAppleSpawnTime: 0,
+  lastTikiSpawnTime: 0,
+  lastSmokeDeathAt: -MINI_GAME_SMOKE_DEATH_GAP_MS,
   nextFrogSpawnAt: 0,
   frogSpawnCount: 0,
   startedAt: 0,
@@ -583,6 +608,47 @@ function playSoundEffect(name, options = {}) {
       playTone({ frequency: 190, endFrequency: 1800, duration: 0.11, type: "square", volume: 0.12, when: 0.05 });
       playTone({ frequency: 420, endFrequency: 210, duration: 0.16, type: "triangle", volume: 0.09, when: 0.11 });
       playNoise({ duration: 0.22, volume: 0.16, lowpass: 3400 });
+      break;
+    case "volcanoRockLaunch":
+      playTone({ frequency: 88, endFrequency: 34, duration: 0.34, type: "sawtooth", volume: 0.18 });
+      playTone({ frequency: 176, endFrequency: 62, duration: 0.25, type: "sine", volume: 0.1, when: 0.03 });
+      playNoise({ duration: 0.22, volume: 0.08, lowpass: 520 });
+      break;
+    case "lavaWarning":
+      playTone({ frequency: 240, endFrequency: 1180, duration: 0.9, type: "triangle", volume: 0.105 });
+      playTone({ frequency: 120, endFrequency: 580, duration: 0.9, type: "sine", volume: 0.075, when: 0.04 });
+      break;
+    case "lavaImpact":
+      playTone({ frequency: 110, endFrequency: 32, duration: 0.24, type: "sine", volume: 0.17 });
+      playNoise({ duration: 0.16, volume: 0.11, lowpass: 650 });
+      break;
+    case "snakeHiss":
+      playNoise({ duration: 0.28, volume: 0.1, lowpass: 2100 });
+      playTone({ frequency: 520, endFrequency: 190, duration: 0.22, type: "triangle", volume: 0.055, when: 0.02 });
+      break;
+    case "fairySpawn":
+      playTone({ frequency: 880, endFrequency: 1760, duration: 0.18, type: "sine", volume: 0.07 });
+      playTone({ frequency: 1320, endFrequency: 1980, duration: 0.16, type: "triangle", volume: 0.045, when: 0.06 });
+      break;
+    case "fairyAttack":
+      playTone({ frequency: 1480, endFrequency: 720, duration: 0.08, type: "triangle", volume: 0.06 });
+      playNoise({ duration: 0.045, volume: 0.025, lowpass: 3200 });
+      break;
+    case "fairyDeath":
+      playTone({ frequency: 1280, endFrequency: 440, duration: 0.24, type: "sine", volume: 0.09 });
+      playTone({ frequency: 1900, endFrequency: 760, duration: 0.18, type: "triangle", volume: 0.055, when: 0.04 });
+      playNoise({ duration: 0.18, volume: 0.055, lowpass: 2600 });
+      break;
+    case "tikiSpawn":
+      playTone({ frequency: 620, endFrequency: 420, duration: 0.09, type: "square", volume: 0.07 });
+      playTone({ frequency: 780, endFrequency: 520, duration: 0.1, type: "triangle", volume: 0.045, when: 0.07 });
+      break;
+    case "tikiAttack":
+      playTone({ frequency: 860, endFrequency: 300, duration: 0.1, type: "square", volume: 0.07 });
+      break;
+    case "tikiDeath":
+      playTone({ frequency: 680, endFrequency: 1240, duration: 0.11, type: "triangle", volume: 0.075 });
+      playNoise({ duration: 0.09, volume: 0.04, lowpass: 2200 });
       break;
     default:
       break;
@@ -1104,6 +1170,18 @@ function startMiniGame() {
   miniGameState.hitMarkers = [];
   miniGameState.appleSplatters = [];
   miniGameState.frogs = [];
+  miniGameState.smokeDeaths = [];
+  miniGameState.herbBursts = [];
+  miniGameState.volcano = null;
+  miniGameState.volcanoWave = 0;
+  miniGameState.lavaRocks = [];
+  miniGameState.lavaSnakes = [];
+  miniGameState.lavaPools = [];
+  miniGameState.fairyHut = null;
+  miniGameState.helperFairies = [];
+  miniGameState.tikiMen = [];
+  miniGameState.droppedSpears = [];
+  miniGameState.magicBursts = [];
   miniGameState.trails = [];
   miniGameState.shells = [];
   miniGameState.obstacles = miniGameState.preludeObstacles.length > 0 ? miniGameState.preludeObstacles : createForestObstacles();
@@ -1112,6 +1190,8 @@ function startMiniGame() {
   miniGameState.lastFrameTime = performance.now();
   miniGameState.lastSpawnTime = miniGameState.lastFrameTime;
   miniGameState.lastAppleSpawnTime = miniGameState.lastFrameTime;
+  miniGameState.lastTikiSpawnTime = miniGameState.lastFrameTime;
+  miniGameState.lastSmokeDeathAt = miniGameState.startedAt - MINI_GAME_SMOKE_DEATH_GAP_MS;
   miniGameState.startedAt = miniGameState.lastFrameTime;
   miniGameState.nextFrogSpawnAt =
     miniGameState.startedAt + MINI_GAME_FROG_EVENT_START_MS + Math.random() * 6000;
@@ -1590,10 +1670,15 @@ function updateMiniGame(timestamp) {
     maybeSpawnGoblin(timestamp);
     maybeSpawnApples(timestamp);
     maybeSpawnFrogEvent(timestamp);
+    updateVolcanoEvents(timestamp, deltaSeconds);
+    updateFairyHutAndHelpers(timestamp, deltaSeconds);
+    updateTikiMen(timestamp, deltaSeconds);
     respawnDestroyedObstacles(timestamp);
     moveBullets(deltaSeconds);
     moveFairyBombs(deltaSeconds);
     updateFrogs(timestamp);
+    updateSmokeDeaths(timestamp);
+    moveLavaHazards(deltaSeconds, timestamp);
     moveGoblins(deltaSeconds);
     checkMiniGameHits();
     checkGoblinContact();
@@ -1610,7 +1695,7 @@ function maybeSpawnGoblin(timestamp) {
   }
 
   const difficulty = getMiniGameDifficulty(timestamp);
-  const spawnInterval = MINI_GAME_GOBLIN_SPAWN_MS - difficulty * 760;
+  const spawnInterval = MINI_GAME_GOBLIN_SPAWN_MS - difficulty * 840;
 
   if (timestamp - miniGameState.lastSpawnTime < spawnInterval) {
     return;
@@ -1636,8 +1721,8 @@ function maybeSpawnGoblin(timestamp) {
     y,
     size: isBig ? 32 + Math.random() * 8 + difficulty * 12 : 18 + Math.random() * 7 + difficulty * 3,
     speed: isBig
-      ? MINI_GAME_GOBLIN_SPEED + difficulty * 32
-      : MINI_GAME_GOBLIN_SPEED + difficulty * 56 + Math.random() * difficulty * 18,
+      ? MINI_GAME_GOBLIN_SPEED + 8 + difficulty * 40
+      : MINI_GAME_GOBLIN_SPEED + 6 + difficulty * 66 + Math.random() * difficulty * 20,
     health: maxHealth,
     maxHealth,
     isBig,
@@ -1652,6 +1737,10 @@ function updateMiniGameFinish(timestamp, deltaSeconds) {
   moveBullets(slowDeltaSeconds);
   moveFairyBombs(slowDeltaSeconds);
   updateFrogs(timestamp);
+  updateSmokeDeaths(timestamp);
+  moveLavaHazards(slowDeltaSeconds, timestamp);
+  updateFairyHutAndHelpers(timestamp, slowDeltaSeconds);
+  updateTikiMen(timestamp, slowDeltaSeconds);
   moveGoblins(slowDeltaSeconds);
   trimMiniGameObjects();
 
@@ -1744,6 +1833,439 @@ function maybeSpawnFrogEvent(timestamp) {
     bubbles: [],
     phase: Math.random() * Math.PI * 2,
     startedAt: timestamp,
+  });
+}
+
+function updateVolcanoEvents(timestamp, deltaSeconds) {
+  const elapsed = timestamp - miniGameState.startedAt;
+
+  if (!miniGameState.volcano) {
+    if (
+      miniGameState.volcanoWave < 1 &&
+      elapsed >= MINI_GAME_VOLCANO_START_MS &&
+      elapsed < MINI_GAME_VOLCANO_START_MS + MINI_GAME_VOLCANO_DURATION_MS
+    ) {
+      spawnVolcano(timestamp, 1);
+    } else if (miniGameState.volcanoWave < 2 && elapsed >= MINI_GAME_FINAL_VOLCANO_START_MS) {
+      spawnVolcano(timestamp, 2);
+    }
+  }
+
+  if (!miniGameState.volcano) {
+    return;
+  }
+
+  const volcanoAge = timestamp - miniGameState.volcano.startedAt;
+
+  if (miniGameState.volcano.wave === 1 && volcanoAge > MINI_GAME_VOLCANO_DURATION_MS) {
+    miniGameState.volcano.isFading = true;
+  }
+
+  if (!miniGameState.volcano.isFading && timestamp - miniGameState.volcano.lastRockAt >= MINI_GAME_VOLCANO_ROCK_INTERVAL_MS) {
+    miniGameState.volcano.lastRockAt = timestamp;
+    launchLavaRock(timestamp);
+  }
+
+  miniGameState.volcano.pulse += deltaSeconds * 5;
+}
+
+function spawnVolcano(timestamp, wave) {
+  const turret = getTurretPosition();
+  const spot = getVolcanoSpawnSpot(turret);
+
+  miniGameState.volcanoWave = wave;
+  miniGameState.volcano = {
+    x: spot.x,
+    y: spot.y,
+    wave,
+    startedAt: timestamp,
+    lastRockAt: timestamp - 500,
+    pulse: 0,
+    isFading: false,
+  };
+}
+
+function getVolcanoSpawnSpot(turret) {
+  let spot = null;
+  let attempts = 0;
+
+  while (!spot && attempts < 80) {
+    attempts += 1;
+    const candidate = {
+      x: 76 + Math.random() * (window.innerWidth - 152),
+      y: 78 + Math.random() * Math.max(80, window.innerHeight * 0.38),
+    };
+    const farFromTurret = Math.hypot(candidate.x - turret.x, candidate.y - turret.y) > 180;
+    const farFromLake =
+      !miniGameState.lake ||
+      Math.hypot(candidate.x - miniGameState.lake.x, candidate.y - miniGameState.lake.y) >
+        miniGameState.lake.radiusX + 95;
+
+    if (farFromTurret && farFromLake) {
+      spot = candidate;
+    }
+  }
+
+  return spot || {
+    x: window.innerWidth * 0.72,
+    y: Math.max(80, Math.min(window.innerHeight * 0.35, turret.y - 190)),
+  };
+}
+
+function launchLavaRock(timestamp) {
+  const volcano = miniGameState.volcano;
+  const turret = getTurretPosition();
+  let target = null;
+  let attempts = 0;
+
+  while (!target && attempts < 60) {
+    attempts += 1;
+    const candidate = {
+      x: 48 + Math.random() * (window.innerWidth - 96),
+      y: 60 + Math.random() * (window.innerHeight - 150),
+    };
+
+    if (Math.hypot(candidate.x - turret.x, candidate.y - turret.y) > 180) {
+      target = candidate;
+    }
+  }
+
+  target = target || { x: window.innerWidth / 2, y: Math.max(70, turret.y - 170) };
+
+  playSoundEffect("volcanoRockLaunch", { minGap: 180 });
+  playSoundEffect("lavaWarning", { minGap: 180 });
+  miniGameState.lavaRocks.push({
+    x: volcano.x,
+    y: volcano.y - 32,
+    targetX: target.x,
+    targetY: target.y,
+    startedAt: timestamp,
+    landAt: timestamp + 1100,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+function moveLavaHazards(deltaSeconds, timestamp) {
+  for (let index = miniGameState.lavaRocks.length - 1; index >= 0; index -= 1) {
+    const rock = miniGameState.lavaRocks[index];
+    const progress = Math.min((timestamp - rock.startedAt) / (rock.landAt - rock.startedAt), 1);
+    const arc = Math.sin(progress * Math.PI) * 120;
+
+    rock.x = rock.x + (rock.targetX - rock.x) * Math.min(deltaSeconds * 3.2, 1);
+    rock.y = rock.y + (rock.targetY - rock.y - arc) * Math.min(deltaSeconds * 3.2, 1);
+
+    if (progress >= 1) {
+      miniGameState.lavaRocks.splice(index, 1);
+      triggerScreenShake(180, 4.5);
+      playSoundEffect("lavaImpact", { minGap: 80 });
+      miniGameState.explosions.push({
+        x: rock.targetX,
+        y: rock.targetY,
+        size: 36,
+        type: "lava",
+        startedAt: performance.now(),
+        pieces: Array.from({ length: 8 }, () => ({
+          x: 0,
+          y: 0,
+          vx: (Math.random() - 0.5) * 120,
+          vy: (Math.random() - 0.5) * 120,
+        })),
+      });
+      spawnLavaSnake(rock.targetX, rock.targetY);
+    }
+  }
+
+  const turret = getTurretPosition();
+
+  miniGameState.lavaSnakes.forEach((snake) => {
+    const dx = turret.x - snake.x;
+    const dy = turret.y - snake.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    snake.phase += deltaSeconds * 9;
+    snake.angle = Math.atan2(dy, dx);
+    snake.x += (dx / distance) * snake.speed * deltaSeconds;
+    snake.y += (dy / distance) * snake.speed * deltaSeconds;
+  });
+
+  miniGameState.lavaPools.forEach((pool) => {
+    for (let goblinIndex = miniGameState.goblins.length - 1; goblinIndex >= 0; goblinIndex -= 1) {
+      const goblin = miniGameState.goblins[goblinIndex];
+
+      if (!goblin.isBoss && Math.hypot(goblin.x - pool.x, goblin.y - pool.y) <= pool.radius + goblin.size * 0.4) {
+        miniGameState.goblins.splice(goblinIndex, 1);
+        createGoblinDeath(goblin.x, goblin.y, goblin.size, "goblin", false);
+      }
+    }
+  });
+}
+
+function spawnLavaSnake(x, y) {
+  miniGameState.lavaSnakes.push({
+    x,
+    y,
+    size: 22,
+    speed: 50,
+    health: 2,
+    maxHealth: 2,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+function updateFairyHutAndHelpers(timestamp, deltaSeconds) {
+  const elapsed = timestamp - miniGameState.startedAt;
+
+  if (!miniGameState.fairyHut && elapsed >= MINI_GAME_FAIRY_HUT_START_MS) {
+    spawnFairyHut(timestamp);
+  }
+
+  if (miniGameState.fairyHut) {
+    const hut = miniGameState.fairyHut;
+    if (
+      miniGameState.helperFairies.length < MINI_GAME_MAX_HELPER_FAIRIES &&
+      timestamp - hut.lastSpawnAt >= MINI_GAME_FAIRY_SPAWN_MS
+    ) {
+      hut.lastSpawnAt = timestamp;
+      spawnHelperFairy(timestamp);
+    }
+  }
+
+  updateHelperFairies(timestamp, deltaSeconds);
+}
+
+function spawnFairyHut(timestamp) {
+  const turret = getTurretPosition();
+  let hut = null;
+  let attempts = 0;
+
+  while (!hut && attempts < 80) {
+    attempts += 1;
+    const candidate = {
+      x: 64 + Math.random() * (window.innerWidth - 128),
+      y: 66 + Math.random() * (window.innerHeight - 190),
+    };
+    const farFromTurret = Math.hypot(candidate.x - turret.x, candidate.y - turret.y) > 135;
+    const farFromLake =
+      !miniGameState.lake ||
+      Math.hypot(candidate.x - miniGameState.lake.x, candidate.y - miniGameState.lake.y) >
+        miniGameState.lake.radiusX + 50;
+
+    if (farFromTurret && farFromLake) {
+      hut = candidate;
+    }
+  }
+
+  miniGameState.fairyHut = {
+    ...(hut || { x: window.innerWidth * 0.18, y: window.innerHeight * 0.54 }),
+    startedAt: timestamp,
+    lastSpawnAt: timestamp - 700,
+  };
+}
+
+function spawnHelperFairy(timestamp) {
+  const hut = miniGameState.fairyHut;
+
+  if (!hut) {
+    return;
+  }
+
+  miniGameState.helperFairies.push({
+    x: hut.x,
+    y: hut.y - 16,
+    vx: (Math.random() - 0.5) * 40,
+    vy: -30,
+    size: 12,
+    health: 3,
+    maxHealth: 3,
+    lastSwingAt: 0,
+    lastHitAt: 0,
+    phase: Math.random() * Math.PI * 2,
+    startedAt: timestamp,
+  });
+  playSoundEffect("fairySpawn", { minGap: 220 });
+}
+
+function updateHelperFairies(timestamp, deltaSeconds) {
+  miniGameState.helperFairies.forEach((fairy) => {
+    fairy.phase += deltaSeconds * 10;
+    const target = findNearestFairyTarget(fairy);
+
+    if (target) {
+      const dx = target.x - fairy.x;
+      const dy = target.y - fairy.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const desiredDistance = 38;
+
+      if (distance > desiredDistance) {
+        fairy.x += (dx / distance) * 84 * deltaSeconds;
+        fairy.y += (dy / distance) * 84 * deltaSeconds;
+      } else if (timestamp - fairy.lastSwingAt > 900) {
+        fairy.lastSwingAt = timestamp;
+        damageFairyTarget(target, 1);
+        createHitMarker(target.x, target.y - (target.size || 20), "-1", "#9be7ff", 12);
+        playSoundEffect("fairyAttack", { minGap: 120 });
+      }
+    } else {
+      fairy.x += Math.sin(fairy.phase) * 22 * deltaSeconds;
+      fairy.y += Math.cos(fairy.phase * 0.7) * 18 * deltaSeconds;
+    }
+
+    fairy.x = Math.max(24, Math.min(window.innerWidth - 24, fairy.x));
+    fairy.y = Math.max(34, Math.min(window.innerHeight - 58, fairy.y));
+    damageFairyFromEnemies(fairy, timestamp);
+  });
+}
+
+function findNearestFairyTarget(fairy) {
+  const candidates = [...miniGameState.goblins, ...miniGameState.tikiMen]
+    .filter((target) => !target.isBoss)
+    .map((target) => ({
+      target,
+      distance: Math.hypot(target.x - fairy.x, target.y - fairy.y),
+    }))
+    .sort((a, b) => a.distance - b.distance);
+
+  return candidates[0]?.target || null;
+}
+
+function damageFairyTarget(target, damage) {
+  target.health -= damage;
+
+  if (target.health > 0) {
+    return;
+  }
+
+  if (miniGameState.tikiMen.includes(target)) {
+    killTiki(target);
+    return;
+  }
+
+  const index = miniGameState.goblins.indexOf(target);
+  if (index >= 0) {
+    miniGameState.goblins.splice(index, 1);
+    createGoblinDeath(target.x, target.y, target.size);
+  }
+}
+
+function damageFairyFromEnemies(fairy, timestamp) {
+  const attacker = [...miniGameState.goblins, ...miniGameState.tikiMen].find(
+    (enemy) => !enemy.isBoss && Math.hypot(enemy.x - fairy.x, enemy.y - fairy.y) < (enemy.size || 18) + 18
+  );
+
+  if (!attacker || timestamp - fairy.lastHitAt < 900) {
+    return;
+  }
+
+  fairy.lastHitAt = timestamp;
+  fairy.health -= 1;
+  playSoundEffect("tikiAttack", { minGap: 120 });
+
+  if (fairy.health <= 0) {
+    killFairy(fairy);
+  }
+}
+
+function killFairy(fairy) {
+  const index = miniGameState.helperFairies.indexOf(fairy);
+
+  if (index >= 0) {
+    miniGameState.helperFairies.splice(index, 1);
+  }
+
+  miniGameState.magicBursts.push({
+    x: fairy.x,
+    y: fairy.y,
+    type: "fairy",
+    startedAt: performance.now(),
+  });
+  playSoundEffect("fairyDeath", { minGap: 120 });
+}
+
+function updateTikiMen(timestamp, deltaSeconds) {
+  const elapsed = timestamp - miniGameState.startedAt;
+
+  if (!miniGameState.bossSpawned && elapsed >= MINI_GAME_TIKI_START_MS && timestamp - miniGameState.lastTikiSpawnTime >= MINI_GAME_TIKI_SPAWN_MS) {
+    miniGameState.lastTikiSpawnTime = timestamp;
+    spawnTikiMan(timestamp);
+  }
+
+  const turret = getTurretPosition();
+  miniGameState.tikiMen.forEach((tiki) => {
+    const fairyTarget = miniGameState.helperFairies
+      .map((fairy) => ({ fairy, distance: Math.hypot(fairy.x - tiki.x, fairy.y - tiki.y) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    const target = fairyTarget && fairyTarget.distance < 120 ? fairyTarget.fairy : turret;
+    const dx = target.x - tiki.x;
+    const dy = target.y - tiki.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    tiki.phase += deltaSeconds * 10;
+    tiki.angle = Math.atan2(dy, dx);
+    tiki.x += (dx / distance) * tiki.speed * deltaSeconds;
+    tiki.y += (dy / distance) * tiki.speed * deltaSeconds;
+
+    if (target !== turret && distance < 24 && timestamp - tiki.lastAttackAt > 900) {
+      tiki.lastAttackAt = timestamp;
+      target.health -= 1;
+      playSoundEffect("tikiAttack", { minGap: 120 });
+      if (target.health <= 0) {
+        killFairy(target);
+      }
+    }
+  });
+}
+
+function spawnTikiMan(timestamp) {
+  const corners = [
+    { x: -24, y: -24 },
+    { x: window.innerWidth + 24, y: -24 },
+    { x: -24, y: window.innerHeight * 0.48 },
+    { x: window.innerWidth + 24, y: window.innerHeight * 0.48 },
+  ];
+  const corner = corners[Math.floor(Math.random() * corners.length)];
+
+  miniGameState.tikiMen.push({
+    x: corner.x,
+    y: corner.y,
+    size: 18,
+    speed: 58,
+    health: 2,
+    maxHealth: 2,
+    phase: Math.random() * Math.PI * 2,
+    angle: 0,
+    lastAttackAt: 0,
+    startedAt: timestamp,
+  });
+  playSoundEffect("tikiSpawn", { minGap: 220 });
+}
+
+function killTiki(tiki) {
+  const index = miniGameState.tikiMen.indexOf(tiki);
+
+  if (index >= 0) {
+    miniGameState.tikiMen.splice(index, 1);
+  }
+
+  miniGameState.magicBursts.push({
+    x: tiki.x,
+    y: tiki.y,
+    type: "tiki",
+    startedAt: performance.now(),
+  });
+  miniGameState.droppedSpears.push({
+    x: tiki.x,
+    y: tiki.y,
+    angle: tiki.angle || 0,
+    startedAt: performance.now(),
+  });
+  playSoundEffect("tikiDeath", { minGap: 100 });
+}
+
+function createLavaPool(x, y) {
+  miniGameState.lavaPools.push({
+    x,
+    y,
+    radius: 34,
+    startedAt: performance.now(),
   });
 }
 
@@ -1986,6 +2508,72 @@ function explodeFairyBomb(bomb) {
     if (Math.hypot(goblin.x - bomb.x, goblin.y - bomb.y) <= blastRadius + goblin.size) {
       miniGameState.goblins.splice(goblinIndex, 1);
       createGoblinDeath(goblin.x, goblin.y, goblin.size);
+    }
+  }
+}
+
+function shouldCreateSmokeDeath(size) {
+  const now = performance.now();
+
+  return (
+    size < 52 &&
+    now - miniGameState.lastSmokeDeathAt >= MINI_GAME_SMOKE_DEATH_GAP_MS
+  );
+}
+
+function createSmokeDeath(x, y, size) {
+  const now = performance.now();
+  miniGameState.lastSmokeDeathAt = now;
+  miniGameState.smokeDeaths.push({
+    x,
+    y,
+    size,
+    startedAt: now,
+    exploded: false,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+function updateSmokeDeaths(timestamp) {
+  miniGameState.smokeDeaths.forEach((death) => {
+    const age = timestamp - death.startedAt;
+
+    if (!death.exploded && age >= 1350) {
+      death.exploded = true;
+      death.explodedAt = timestamp;
+      triggerGreenSmokeBlast(death.x, death.y);
+    }
+  });
+}
+
+function triggerGreenSmokeBlast(x, y) {
+  triggerScreenShake(420, 8);
+  playSoundEffect("fairyBomb", { minGap: 0 });
+  miniGameState.herbBursts.push({
+    x,
+    y,
+    startedAt: performance.now(),
+  });
+  miniGameState.explosions.push({
+    x,
+    y,
+    size: MINI_GAME_SMOKE_DEATH_BLAST_RADIUS,
+    type: "green",
+    startedAt: performance.now(),
+    pieces: Array.from({ length: 14 }, () => ({
+      x: 0,
+      y: 0,
+      vx: (Math.random() - 0.5) * 170,
+      vy: (Math.random() - 0.5) * 170,
+    })),
+  });
+
+  for (let goblinIndex = miniGameState.goblins.length - 1; goblinIndex >= 0; goblinIndex -= 1) {
+    const goblin = miniGameState.goblins[goblinIndex];
+
+    if (!goblin.isBoss && Math.hypot(goblin.x - x, goblin.y - y) <= MINI_GAME_SMOKE_DEATH_BLAST_RADIUS + goblin.size) {
+      miniGameState.goblins.splice(goblinIndex, 1);
+      createGoblinDeath(goblin.x, goblin.y, goblin.size, "goblin", false);
     }
   }
 }
@@ -2258,6 +2846,48 @@ function checkMiniGameHits() {
     }
   }
 
+  for (let snakeIndex = miniGameState.lavaSnakes.length - 1; snakeIndex >= 0; snakeIndex -= 1) {
+    const snake = miniGameState.lavaSnakes[snakeIndex];
+
+    for (let bulletIndex = miniGameState.bullets.length - 1; bulletIndex >= 0; bulletIndex -= 1) {
+      const bullet = miniGameState.bullets[bulletIndex];
+
+      if (Math.hypot(snake.x - bullet.x, snake.y - bullet.y) <= snake.size + bullet.radius) {
+        miniGameState.bullets.splice(bulletIndex, 1);
+        snake.health -= bullet.damage;
+        createHitMarker(snake.x, snake.y - snake.size, `-${bullet.damage}`, "#ff6d2e", 13);
+
+        if (snake.health <= 0) {
+          miniGameState.lavaSnakes.splice(snakeIndex, 1);
+          playSoundEffect("snakeHiss", { minGap: 80 });
+          createLavaPool(snake.x, snake.y);
+        }
+
+        break;
+      }
+    }
+  }
+
+  for (let tikiIndex = miniGameState.tikiMen.length - 1; tikiIndex >= 0; tikiIndex -= 1) {
+    const tiki = miniGameState.tikiMen[tikiIndex];
+
+    for (let bulletIndex = miniGameState.bullets.length - 1; bulletIndex >= 0; bulletIndex -= 1) {
+      const bullet = miniGameState.bullets[bulletIndex];
+
+      if (Math.hypot(tiki.x - bullet.x, tiki.y - bullet.y) <= tiki.size + bullet.radius) {
+        miniGameState.bullets.splice(bulletIndex, 1);
+        tiki.health -= bullet.damage;
+        createHitMarker(tiki.x, tiki.y - tiki.size, `-${bullet.damage}`, "#ffd64a", 12);
+
+        if (tiki.health <= 0) {
+          killTiki(tiki);
+        }
+
+        break;
+      }
+    }
+  }
+
   for (let goblinIndex = miniGameState.goblins.length - 1; goblinIndex >= 0; goblinIndex -= 1) {
     const goblin = miniGameState.goblins[goblinIndex];
 
@@ -2421,6 +3051,24 @@ function triggerGoldenAppleBlast(x, y) {
 function checkGoblinContact() {
   const turret = getTurretPosition();
   const hitRadius = 30;
+  const touchedTiki = miniGameState.tikiMen.find(
+    (tiki) => Math.hypot(tiki.x - turret.x, tiki.y - turret.y) <= tiki.size + hitRadius
+  );
+
+  if (touchedTiki) {
+    failMiniGame(touchedTiki.x, touchedTiki.y);
+    return;
+  }
+
+  const touchedSnake = miniGameState.lavaSnakes.find(
+    (snake) => Math.hypot(snake.x - turret.x, snake.y - turret.y) <= snake.size + hitRadius
+  );
+
+  if (touchedSnake) {
+    failMiniGame(touchedSnake.x, touchedSnake.y);
+    return;
+  }
+
   const touchedGoblin = miniGameState.goblins.find(
     (goblin) => Math.hypot(goblin.x - turret.x, goblin.y - turret.y) <= goblin.size + hitRadius
   );
@@ -2446,8 +3094,13 @@ function endMiniGameWithVictory(x, y) {
   startMiniGameFinish("victory", x, y);
 }
 
-function createGoblinDeath(x, y, size, soundType = "goblin") {
+function createGoblinDeath(x, y, size, soundType = "goblin", allowSpecial = true) {
   if (soundType === "goblin") {
+    if (allowSpecial && shouldCreateSmokeDeath(size)) {
+      createSmokeDeath(x, y, size);
+      return;
+    }
+
     if (size >= 52) {
       playSoundEffect("bossDeath", { minGap: 900 });
     } else if (size >= 30) {
@@ -2491,12 +3144,26 @@ function trimMiniGameObjects() {
   miniGameState.frogs = miniGameState.frogs.filter(
     (frog) => frog.state !== "giant" || now - frog.hitAt < 8600
   );
+  miniGameState.smokeDeaths = miniGameState.smokeDeaths.filter(
+    (death) => !death.exploded || now - death.explodedAt < 650
+  );
+  miniGameState.herbBursts = miniGameState.herbBursts.filter((burst) => now - burst.startedAt < 1600);
+  miniGameState.magicBursts = miniGameState.magicBursts.filter((burst) => now - burst.startedAt < 800);
+  miniGameState.droppedSpears = miniGameState.droppedSpears.filter((spear) => now - spear.startedAt < 1000);
+  miniGameState.lavaRocks = miniGameState.lavaRocks.filter((rock) => now - rock.startedAt < 1800);
+  miniGameState.lavaPools = miniGameState.lavaPools.filter((pool) => now - pool.startedAt < 1000);
+  miniGameState.tikiMen = miniGameState.tikiMen.filter(
+    (tiki) => tiki.x > -70 && tiki.x < width + 70 && tiki.y > -70 && tiki.y < height + 70
+  );
   miniGameState.scorchMarks = miniGameState.scorchMarks.filter(
     (mark) => !mark.createdAt || now - mark.createdAt < 620
   );
+  if (miniGameState.volcano?.isFading && now - miniGameState.volcano.startedAt > MINI_GAME_VOLCANO_DURATION_MS + 900) {
+    miniGameState.volcano = null;
+  }
   miniGameState.goblins = miniGameState.goblins.filter((goblin) => goblin.y < height + 40);
   miniGameState.explosions = miniGameState.explosions.filter(
-    (explosion) => now - explosion.startedAt < (explosion.type === "golden" ? 720 : MINI_GAME_DEATH_ANIMATION_MS)
+    (explosion) => now - explosion.startedAt < (explosion.type === "golden" || explosion.type === "green" || explosion.type === "lava" ? 720 : MINI_GAME_DEATH_ANIMATION_MS)
   );
 }
 
@@ -2514,8 +3181,11 @@ function drawMiniGame() {
   context.globalAlpha = gameplayOpacity;
   applyScreenShake(context);
   drawLake(context);
+  drawHerbBursts(context);
   drawLevelPulses(context);
   drawTrails(context);
+  drawVolcanoHazards(context);
+  drawFairyHut(context);
   drawScorchMarks(context);
   drawForestObstacles(context);
   drawApples(context);
@@ -2525,6 +3195,12 @@ function drawMiniGame() {
   drawShells(context);
   drawBullets(context);
   drawGoblins(context);
+  drawSmokeDeaths(context);
+  drawLavaSnakes(context);
+  drawHelperFairies(context);
+  drawTikiMen(context);
+  drawDroppedSpears(context);
+  drawMagicBursts(context);
   drawExplosions(context);
   drawHitMarkers(context);
   drawTurret(context);
@@ -3225,6 +3901,334 @@ function drawFairyBombs(context) {
   });
 }
 
+function drawVolcanoHazards(context) {
+  drawLavaPools(context);
+  drawVolcano(context);
+  drawLavaRocks(context);
+}
+
+function drawVolcano(context) {
+  const volcano = miniGameState.volcano;
+
+  if (!volcano) {
+    return;
+  }
+
+  const age = performance.now() - volcano.startedAt;
+  const fade = volcano.isFading ? Math.max(0, 1 - (age - MINI_GAME_VOLCANO_DURATION_MS) / 900) : 1;
+  const pulse = Math.sin(volcano.pulse) * 4;
+
+  context.save();
+  context.globalAlpha = fade;
+  context.translate(volcano.x, volcano.y);
+  context.shadowColor = "rgba(255, 74, 24, 0.75)";
+  context.shadowBlur = 20;
+
+  context.fillStyle = "rgba(255, 72, 24, 0.62)";
+  context.beginPath();
+  context.ellipse(0, 48, 72, 20, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = "#211629";
+  context.beginPath();
+  context.moveTo(-68, 46);
+  context.lineTo(-28, -38);
+  context.lineTo(0, -54);
+  context.lineTo(32, -36);
+  context.lineTo(70, 46);
+  context.closePath();
+  context.fill();
+
+  context.fillStyle = "#3a1d1c";
+  context.beginPath();
+  context.moveTo(-48, 46);
+  context.lineTo(-18, -24);
+  context.lineTo(0, -38);
+  context.lineTo(22, -22);
+  context.lineTo(52, 46);
+  context.closePath();
+  context.fill();
+
+  context.fillStyle = "#ff4a24";
+  context.fillRect(-7, -40, 14, 76);
+  context.fillRect(-30, 2, 11, 44);
+  context.fillRect(22, -8, 10, 54);
+  context.fillStyle = "#ff9a2e";
+  context.fillRect(-4, -36, 8, 68);
+  context.fillRect(-27, 10, 5, 34);
+  context.fillRect(25, 0, 4, 40);
+
+  context.fillStyle = "#ffda5a";
+  context.beginPath();
+  context.arc(0, -55 - pulse, 18 + pulse * 0.35, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "#ff4a24";
+  context.beginPath();
+  context.arc(0, -49, 24, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "#211629";
+  context.fillRect(-18, -48, 36, 13);
+
+  context.strokeStyle = "#ff9a2e";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(-68, 46);
+  context.lineTo(-28, -38);
+  context.lineTo(0, -54);
+  context.lineTo(32, -36);
+  context.lineTo(70, 46);
+  context.stroke();
+
+  context.fillStyle = "rgba(255, 154, 46, 0.9)";
+  for (let index = 0; index < 12; index += 1) {
+    const sparkAngle = (Math.PI * 2 * index) / 12 + volcano.pulse * 0.18;
+    const distance = 26 + Math.sin(volcano.pulse + index) * 8;
+    context.fillRect(Math.cos(sparkAngle) * distance - 2, -58 + Math.sin(sparkAngle) * distance * 0.55 - 2, 4, 4);
+  }
+  context.restore();
+}
+
+function drawLavaRocks(context) {
+  miniGameState.lavaRocks.forEach((rock) => {
+    const progress = Math.min((performance.now() - rock.startedAt) / (rock.landAt - rock.startedAt), 1);
+    const markerAlpha = Math.min(1, progress * 1.8);
+
+    context.save();
+    context.translate(rock.targetX, rock.targetY);
+    context.rotate(performance.now() / 140 + rock.phase);
+    context.globalAlpha = markerAlpha;
+    context.strokeStyle = "rgba(255, 50, 30, 0.9)";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(0, 0, 22, 0, Math.PI * 2);
+    context.moveTo(-28, 0);
+    context.lineTo(28, 0);
+    context.moveTo(0, -28);
+    context.lineTo(0, 28);
+    context.stroke();
+    context.restore();
+
+    context.save();
+    context.translate(rock.x, rock.y);
+    context.shadowColor = "rgba(255, 80, 24, 0.9)";
+    context.shadowBlur = 16;
+    context.fillStyle = "#ff4a24";
+    context.fillRect(-8, -8, 16, 16);
+    context.fillStyle = "#ffd64a";
+    context.fillRect(-3, -3, 6, 6);
+    context.restore();
+  });
+}
+
+function drawLavaPools(context) {
+  miniGameState.lavaPools.forEach((pool) => {
+    const progress = Math.min((performance.now() - pool.startedAt) / 1000, 1);
+    const opacity = 1 - progress;
+
+    context.save();
+    context.globalAlpha = opacity;
+    context.translate(pool.x, pool.y);
+    context.shadowColor = "rgba(255, 70, 22, 0.7)";
+    context.shadowBlur = 16;
+    context.fillStyle = "rgba(255, 72, 24, 0.7)";
+    context.beginPath();
+    context.ellipse(0, 0, pool.radius * (1 + progress * 0.4), pool.radius * 0.42, 0, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "rgba(255, 220, 80, 0.72)";
+    context.fillRect(-pool.radius * 0.45, -3, pool.radius * 0.9, 6);
+    context.restore();
+  });
+}
+
+function drawLavaSnakes(context) {
+  miniGameState.lavaSnakes.forEach((snake) => {
+    const wobble = Math.sin(snake.phase) * 3;
+
+    context.save();
+    context.translate(snake.x, snake.y);
+    context.rotate(snake.angle || 0);
+    context.shadowColor = "rgba(255, 74, 24, 0.72)";
+    context.shadowBlur = 14;
+    for (let index = 0; index < 4; index += 1) {
+      const x = -snake.size + index * (snake.size * 0.45);
+      const y = Math.sin(snake.phase + index * 0.9) * 4 + wobble * 0.25;
+      context.fillStyle = index % 2 === 0 ? "#ff4a24" : "#ff7a2e";
+      context.fillRect(x, y - 5, snake.size * 0.55, 10);
+    }
+    context.fillStyle = "#ff4a24";
+    context.fillRect(snake.size * 0.55, -11, 15, 18);
+    context.fillStyle = "#ffd64a";
+    context.fillRect(snake.size * 0.82, -7, 4, 4);
+    context.fillStyle = "#000000";
+    context.fillRect(snake.size * 1.02, -2, 8, 3);
+    context.restore();
+    drawLavaSnakeHealthBar(context, snake);
+  });
+}
+
+function drawLavaSnakeHealthBar(context, snake) {
+  const width = snake.size * 1.8;
+  const ratio = Math.max(0, snake.health / snake.maxHealth);
+
+  context.save();
+  context.fillStyle = "rgba(0, 0, 0, 0.72)";
+  context.fillRect(snake.x - width / 2, snake.y - snake.size - 13, width, 4);
+  context.fillStyle = "#ff4a24";
+  context.fillRect(snake.x - width / 2, snake.y - snake.size - 13, width * ratio, 4);
+  context.strokeStyle = "rgba(255, 255, 255, 0.65)";
+  context.lineWidth = 1;
+  context.strokeRect(snake.x - width / 2, snake.y - snake.size - 13, width, 4);
+  context.restore();
+}
+
+function drawFairyHut(context) {
+  const hut = miniGameState.fairyHut;
+
+  if (!hut) {
+    return;
+  }
+
+  const age = performance.now() - hut.startedAt;
+  const fade = Math.min(age / 700, 1);
+
+  context.save();
+  context.globalAlpha = fade;
+  context.translate(hut.x, hut.y);
+  context.shadowColor = "rgba(156, 255, 220, 0.42)";
+  context.shadowBlur = 14;
+  context.fillStyle = "#6b3f26";
+  context.fillRect(-20, -4, 40, 28);
+  context.fillStyle = "#8ee87f";
+  context.fillRect(-27, -17, 54, 15);
+  context.fillRect(-19, -26, 38, 11);
+  context.fillStyle = "#c9ffe0";
+  context.fillRect(-7, 8, 14, 16);
+  context.fillStyle = "#ffd64a";
+  context.fillRect(10, 1, 6, 6);
+  context.strokeStyle = "rgba(255,255,255,0.75)";
+  context.lineWidth = 1;
+  context.strokeRect(-20, -4, 40, 28);
+  context.restore();
+}
+
+function drawHelperFairies(context) {
+  miniGameState.helperFairies.forEach((fairy) => {
+    const flap = Math.sin(fairy.phase) * 5;
+
+    context.save();
+    context.translate(fairy.x, fairy.y);
+    context.shadowColor = "rgba(155, 231, 255, 0.72)";
+    context.shadowBlur = 14;
+    context.fillStyle = "rgba(155, 231, 255, 0.82)";
+    context.beginPath();
+    context.ellipse(-9, flap * 0.2, 8, 4 + Math.abs(flap) * 0.4, -0.6, 0, Math.PI * 2);
+    context.ellipse(9, flap * 0.2, 8, 4 + Math.abs(flap) * 0.4, 0.6, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "#ffe8ff";
+    context.fillRect(-4, -7, 8, 13);
+    context.fillStyle = "#ffd64a";
+    context.fillRect(-3, -12, 6, 5);
+    context.strokeStyle = "#ffffff";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(5, 0);
+    context.lineTo(17, -8 + Math.sin(fairy.phase * 1.4) * 4);
+    context.stroke();
+    drawSmallHealthBar(context, 0, -20, 24, fairy.health / fairy.maxHealth, "#9be7ff");
+    context.restore();
+  });
+}
+
+function drawTikiMen(context) {
+  miniGameState.tikiMen.forEach((tiki) => {
+    const step = tiki.size / 4;
+    const run = Math.sin(tiki.phase) * 3;
+
+    context.save();
+    context.translate(tiki.x, tiki.y + run);
+    context.rotate(tiki.angle || 0);
+    context.shadowColor = "rgba(255, 214, 74, 0.45)";
+    context.shadowBlur = 8;
+    context.fillStyle = "#8a4d26";
+    context.fillRect(-step * 1.2, -step * 1.8, step * 2.4, step * 3.2);
+    context.fillStyle = "#c47a32";
+    context.fillRect(-step * 1.6, -step * 2.4, step * 3.2, step * 1.4);
+    context.fillStyle = "#111111";
+    context.fillRect(-step, -step * 2, step * 0.6, step * 0.45);
+    context.fillRect(step * 0.4, -step * 2, step * 0.6, step * 0.45);
+    context.fillStyle = "#ffd64a";
+    context.fillRect(-step * 0.7, -step * 1.45, step * 1.4, step * 0.35);
+    context.strokeStyle = "#d8b67a";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(step * 1.4, 0);
+    context.lineTo(step * 3.6, -step * 1.6);
+    context.stroke();
+    drawSmallHealthBar(context, 0, -step * 3.2, 28, tiki.health / tiki.maxHealth, "#ffd64a");
+    context.restore();
+  });
+}
+
+function drawDroppedSpears(context) {
+  miniGameState.droppedSpears.forEach((spear) => {
+    const progress = Math.min((performance.now() - spear.startedAt) / 1000, 1);
+
+    context.save();
+    context.globalAlpha = 1 - progress;
+    context.translate(spear.x, spear.y);
+    context.rotate(spear.angle);
+    context.strokeStyle = "#d8b67a";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(-12, 0);
+    context.lineTo(16, 0);
+    context.stroke();
+    context.fillStyle = "#ffffff";
+    context.fillRect(15, -3, 6, 6);
+    context.restore();
+  });
+}
+
+function drawMagicBursts(context) {
+  miniGameState.magicBursts.forEach((burst) => {
+    const progress = Math.min((performance.now() - burst.startedAt) / 800, 1);
+    const opacity = 1 - progress;
+
+    context.save();
+    context.globalAlpha = opacity;
+    context.translate(burst.x, burst.y);
+    context.shadowColor = burst.type === "fairy" ? "rgba(96, 207, 255, 0.9)" : "rgba(255, 214, 74, 0.8)";
+    context.shadowBlur = 16;
+    context.strokeStyle = burst.type === "fairy" ? "#60cfff" : "#ffd64a";
+    context.fillStyle = burst.type === "fairy" ? "#b15cff" : "#ffd64a";
+
+    if (burst.type === "fairy") {
+      context.lineWidth = 3;
+      context.beginPath();
+      for (let angle = 0; angle < Math.PI * 2; angle += 0.35) {
+        const radius = 5 + progress * 42 + angle * 1.2;
+        context.lineTo(Math.cos(angle + progress * 5) * radius, Math.sin(angle + progress * 5) * radius);
+      }
+      context.stroke();
+    } else {
+      for (let index = 0; index < 8; index += 1) {
+        const angle = (Math.PI * 2 * index) / 8;
+        const distance = 8 + progress * 30;
+        context.fillRect(Math.cos(angle) * distance - 3, Math.sin(angle) * distance - 3, 6, 6);
+      }
+    }
+
+    context.restore();
+  });
+}
+
+function drawSmallHealthBar(context, x, y, width, ratio, color) {
+  context.fillStyle = "rgba(0,0,0,0.75)";
+  context.fillRect(x - width / 2, y, width, 3);
+  context.fillStyle = color;
+  context.fillRect(x - width / 2, y, width * Math.max(0, ratio), 3);
+}
+
 function drawForestObstacles(context) {
   miniGameState.obstacles.forEach((obstacle) => {
     if (obstacle.isDestroyed) {
@@ -3457,6 +4461,104 @@ function drawGoblins(context) {
   });
 }
 
+function drawSmokeDeaths(context) {
+  miniGameState.smokeDeaths.forEach((death) => {
+    const age = performance.now() - death.startedAt;
+
+    if (death.exploded) {
+      return;
+    }
+
+    const inhale = Math.min(age / 650, 1);
+    const puff = Math.max(0, Math.min((age - 650) / 550, 1));
+    const step = Math.max(3, death.size / 5) * (1 + inhale * 0.28);
+
+    context.save();
+    context.translate(death.x, death.y);
+    context.shadowColor = "rgba(156, 255, 156, 0.6)";
+    context.shadowBlur = 14;
+    context.fillStyle = "#9cff9c";
+    context.fillRect(-step * 2, -step, step * 4, step * 3);
+    context.fillRect(-step * 3, 0, step, step);
+    context.fillRect(step * 2, 0, step, step);
+    context.fillRect(-step * 2, -step * 2, step, step);
+    context.fillRect(step, -step * 2, step, step);
+    context.fillStyle = "#000000";
+    context.fillRect(-step * 1.2, -step * 0.1, step * 0.8, step * 0.25);
+    context.fillRect(step * 0.4, -step * 0.1, step * 0.8, step * 0.25);
+    context.fillRect(-step * 1.2, step * 1.1, step * 2.4, puff > 0 ? step * 1.1 : step * 0.35);
+
+    context.fillStyle = "#d8c4a4";
+    context.fillRect(step * 1.35, step * 0.55, step * 2.35, step * 0.52);
+    context.strokeStyle = "#000000";
+    context.lineWidth = Math.max(1, step * 0.12);
+    context.strokeRect(step * 1.35, step * 0.55, step * 2.35, step * 0.52);
+    context.fillStyle = "#ff4a24";
+    context.fillRect(step * 3.45, step * 0.45, step * 0.42, step * 0.72);
+    context.fillStyle = "#ffffff";
+    context.fillRect(step * 1.55, step * 0.62, step * 0.34, step * 0.36);
+
+    if (puff > 0) {
+      context.strokeStyle = `rgba(156, 255, 156, ${1 - puff})`;
+      context.lineWidth = 3;
+      for (let index = 0; index < 3; index += 1) {
+        context.beginPath();
+        context.arc(step * (1.5 + index * 0.7) + puff * 28, -step * (0.4 + index * 0.4), step * (0.8 + puff * 1.8), 0, Math.PI * 2);
+        context.stroke();
+      }
+    }
+
+    context.restore();
+  });
+}
+
+function drawHerbBursts(context) {
+  miniGameState.herbBursts.forEach((burst) => {
+    const progress = Math.min((performance.now() - burst.startedAt) / 1600, 1);
+    const opacity = progress < 0.18 ? progress / 0.18 : Math.max(0, 1 - (progress - 0.72) / 0.28);
+    const scale = 0.18 + progress * 2.2;
+
+    context.save();
+    context.globalAlpha = opacity * 0.34;
+    context.translate(burst.x, burst.y);
+    context.scale(scale, scale);
+    context.rotate(Math.sin(progress * Math.PI * 2) * 0.08);
+    drawRetroLeaf(context, 0, 0, 34);
+    context.restore();
+  });
+}
+
+function drawRetroLeaf(context, x, y, size) {
+  context.save();
+  context.translate(x, y);
+  context.strokeStyle = "#061f0c";
+  context.lineWidth = Math.max(2, size * 0.08);
+  context.fillStyle = "#42f05f";
+
+  for (let index = 0; index < 7; index += 1) {
+    const angle = (index - 3) * 0.32;
+    const length = size * (index === 3 ? 1.45 : 1.08 - Math.abs(index - 3) * 0.06);
+    context.save();
+    context.rotate(angle);
+    context.beginPath();
+    context.moveTo(0, 0);
+    context.lineTo(-size * 0.16, -length * 0.35);
+    context.lineTo(0, -length);
+    context.lineTo(size * 0.16, -length * 0.35);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.restore();
+  }
+
+  context.strokeStyle = "#083813";
+  context.beginPath();
+  context.moveTo(0, 0);
+  context.lineTo(0, size * 0.85);
+  context.stroke();
+  context.restore();
+}
+
 function drawBossGoblin(context, boss) {
   const step = Math.max(6, boss.size / 7);
   const mouthOpen = Math.sin(performance.now() / 90 + boss.wobble) > -0.25;
@@ -3513,27 +4615,46 @@ function drawExplosions(context) {
 
   miniGameState.explosions.forEach((explosion) => {
     const age = now - explosion.startedAt;
-    const duration = explosion.type === "golden" ? 720 : MINI_GAME_DEATH_ANIMATION_MS;
+    const duration = explosion.type === "golden" || explosion.type === "green" || explosion.type === "lava" ? 720 : MINI_GAME_DEATH_ANIMATION_MS;
     const progress = age / duration;
     const isGolden = explosion.type === "golden";
+    const isGreen = explosion.type === "green";
+    const isLava = explosion.type === "lava";
 
     context.save();
-    context.fillStyle = isGolden ? `rgba(255, 213, 74, ${1 - progress})` : `rgba(156, 255, 156, ${1 - progress})`;
-    context.shadowColor = isGolden ? "rgba(255, 213, 74, 0.9)" : "rgba(156, 255, 156, 0.7)";
-    context.shadowBlur = isGolden ? 24 : 12;
+    context.fillStyle = isGolden
+      ? `rgba(255, 213, 74, ${1 - progress})`
+      : isGreen
+        ? `rgba(66, 240, 95, ${1 - progress})`
+        : isLava
+          ? `rgba(255, 74, 24, ${1 - progress})`
+          : `rgba(156, 255, 156, ${1 - progress})`;
+    context.shadowColor = isGolden
+      ? "rgba(255, 213, 74, 0.9)"
+      : isGreen
+        ? "rgba(66, 240, 95, 0.85)"
+        : isLava
+          ? "rgba(255, 74, 24, 0.88)"
+          : "rgba(156, 255, 156, 0.7)";
+    context.shadowBlur = isGolden || isGreen || isLava ? 24 : 12;
 
-    if (isGolden) {
+    if (isGolden || isGreen || isLava) {
       context.beginPath();
-      context.arc(explosion.x, explosion.y, MINI_GAME_GOLDEN_APPLE_RADIUS * progress, 0, Math.PI * 2);
-      context.strokeStyle = `rgba(255, 213, 74, ${1 - progress})`;
+      context.arc(explosion.x, explosion.y, explosion.size * progress, 0, Math.PI * 2);
+      context.strokeStyle = isGolden
+        ? `rgba(255, 213, 74, ${1 - progress})`
+        : isGreen
+          ? `rgba(66, 240, 95, ${1 - progress})`
+          : `rgba(255, 74, 24, ${1 - progress})`;
       context.lineWidth = 4;
       context.stroke();
     }
 
     explosion.pieces.forEach((piece) => {
-      const x = explosion.x + piece.vx * progress * (isGolden ? 0.75 : 0.55);
-      const y = explosion.y + piece.vy * progress * (isGolden ? 0.75 : 0.55);
-      context.fillRect(x, y, Math.max(2, explosion.size / (isGolden ? 18 : 5)), Math.max(2, explosion.size / (isGolden ? 18 : 5)));
+      const spread = isGolden || isGreen || isLava ? 0.75 : 0.55;
+      const x = explosion.x + piece.vx * progress * spread;
+      const y = explosion.y + piece.vy * progress * spread;
+      context.fillRect(x, y, Math.max(2, explosion.size / (isGolden || isGreen || isLava ? 18 : 5)), Math.max(2, explosion.size / (isGolden || isGreen || isLava ? 18 : 5)));
     });
 
     context.restore();
