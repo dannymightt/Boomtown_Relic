@@ -34,6 +34,15 @@ const WIZARD_EXIT_FADE_MS = 800;
 const WIZARD_SPEECH_TEXT = "oi mate";
 const WIZARD_SECOND_SPEECH_TEXT = "Shoot these fucking things will ya..";
 const TYPING_SOUND_URL = "assets/code-typing-soundfx.wav";
+const RETRO_FX_SOUND_URL = "assets/retro-fx-2.mp3";
+const RETRO_FX_SPRITES = {
+  menuStart: { start: 0.05, duration: 0.28, volume: 0.9 },
+  shoot: { start: 0.42, duration: 0.16, volume: 0.78 },
+  applePop: { start: 0.82, duration: 0.22, volume: 0.82 },
+  explosion: { start: 1.3, duration: 0.4, volume: 0.88 },
+  levelUp: { start: 1.95, duration: 0.5, volume: 0.86 },
+  frogBounce: { start: 2.62, duration: 0.24, volume: 0.78 },
+};
 const TYPING_SOUND_VOLUME = 0.38;
 const MINI_GAME_FIRE_COOLDOWN_MS = 500;
 const MINI_GAME_BULLET_SPEED = 760;
@@ -88,9 +97,14 @@ const loadingState = {
 const audioState = {
   context: null,
   masterGain: null,
+  sfxGain: null,
   typingBuffer: null,
+  retroFxBuffer: null,
+  retroFxLoadPromise: null,
   typingSource: null,
   isTypingSoundActive: false,
+  resumePromise: null,
+  lastSfxTimes: {},
 };
 
 const miniGameState = {
@@ -125,6 +139,7 @@ const miniGameState = {
   status: "ready",
   bossSpawned: false,
   preludeStartedAt: 0,
+  preludeTimerGlitchSoundPlayed: false,
   preludeObstacles: [],
   gameplayFadeStartedAt: 0,
   shakeUntil: 0,
@@ -205,29 +220,87 @@ function getAudioContextConstructor() {
   return window.AudioContext || window.webkitAudioContext;
 }
 
-// Web Audio is created from the answer tap so mobile browsers allow sound.
-async function unlockTypingAudio() {
+function ensureAudioContext() {
   const AudioContextConstructor = getAudioContextConstructor();
 
   if (!AudioContextConstructor) {
-    return;
+    return null;
   }
 
   if (!audioState.context) {
     audioState.context = new AudioContextConstructor();
+  }
+
+  if (!audioState.masterGain) {
     audioState.masterGain = audioState.context.createGain();
     audioState.masterGain.gain.value = TYPING_SOUND_VOLUME;
     audioState.masterGain.connect(audioState.context.destination);
   }
 
-  if (audioState.context.state === "suspended") {
-    await audioState.context.resume();
+  if (!audioState.sfxGain) {
+    audioState.sfxGain = audioState.context.createGain();
+    audioState.sfxGain.gain.value = 0.78;
+    audioState.sfxGain.connect(audioState.context.destination);
+  }
+
+  return audioState.context;
+}
+
+function unlockGameAudio() {
+  const context = ensureAudioContext();
+
+  if (!context) {
+    return Promise.resolve();
+  }
+
+  if (context.state === "suspended") {
+    audioState.resumePromise = context.resume().catch(() => {});
+  } else {
+    audioState.resumePromise = Promise.resolve();
+  }
+
+  loadRetroFxSound();
+  return audioState.resumePromise;
+}
+
+function loadRetroFxSound() {
+  const context = ensureAudioContext();
+
+  if (!context || audioState.retroFxBuffer || audioState.retroFxLoadPromise) {
+    return audioState.retroFxLoadPromise;
+  }
+
+  audioState.retroFxLoadPromise = fetch(RETRO_FX_SOUND_URL)
+    .then((response) => response.arrayBuffer())
+    .then((audioData) => context.decodeAudioData(audioData))
+    .then((buffer) => {
+      audioState.retroFxBuffer = buffer;
+      return buffer;
+    })
+    .catch(() => {
+      audioState.retroFxLoadPromise = null;
+      return null;
+    });
+
+  return audioState.retroFxLoadPromise;
+}
+
+// Web Audio is created from the answer tap so mobile browsers allow sound.
+async function unlockTypingAudio() {
+  const context = ensureAudioContext();
+
+  if (!context) {
+    return;
+  }
+
+  if (context.state === "suspended") {
+    await context.resume();
   }
 
   if (!audioState.typingBuffer) {
     const response = await fetch(TYPING_SOUND_URL);
     const audioData = await response.arrayBuffer();
-    audioState.typingBuffer = await audioState.context.decodeAudioData(audioData);
+    audioState.typingBuffer = await context.decodeAudioData(audioData);
   }
 }
 
@@ -260,6 +333,260 @@ function stopTypingSound() {
   audioState.typingSource.disconnect();
   audioState.typingSource = null;
   audioState.isTypingSoundActive = false;
+}
+
+function playTone({ frequency, endFrequency, duration, type = "square", volume = 0.14, when = 0 }) {
+  const context = audioState.context;
+
+  if (!context || !audioState.sfxGain || context.state !== "running") {
+    return;
+  }
+
+  const startAt = context.currentTime + when;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+
+  if (endFrequency) {
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), startAt + duration);
+  }
+
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+  oscillator.connect(gain);
+  gain.connect(audioState.sfxGain);
+  oscillator.start(startAt);
+  oscillator.stop(startAt + duration + 0.03);
+}
+
+function playNoise({ duration, volume = 0.12, lowpass = 900, when = 0 }) {
+  const context = audioState.context;
+
+  if (!context || !audioState.sfxGain || context.state !== "running") {
+    return;
+  }
+
+  const startAt = context.currentTime + when;
+  const buffer = context.createBuffer(1, Math.max(1, Math.floor(context.sampleRate * duration)), context.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  for (let index = 0; index < data.length; index += 1) {
+    data[index] = (Math.random() * 2 - 1) * (1 - index / data.length);
+  }
+
+  const source = context.createBufferSource();
+  const filter = context.createBiquadFilter();
+  const gain = context.createGain();
+
+  source.buffer = buffer;
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(lowpass, startAt);
+  gain.gain.setValueAtTime(volume, startAt);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioState.sfxGain);
+  source.start(startAt);
+}
+
+function playRetroFxSprite(spriteName, options = {}) {
+  const context = audioState.context;
+  const buffer = audioState.retroFxBuffer;
+  const sprite = RETRO_FX_SPRITES[spriteName];
+
+  if (!context || !audioState.sfxGain || !buffer || !sprite || context.state !== "running") {
+    return false;
+  }
+
+  const source = context.createBufferSource();
+  const gain = context.createGain();
+  const startOffset = Math.min(sprite.start, Math.max(0, buffer.duration - 0.02));
+  const duration = Math.min(sprite.duration, Math.max(0.02, buffer.duration - startOffset));
+  const startAt = context.currentTime + 0.001;
+  const volume = options.volume ?? sprite.volume;
+  const playbackRate = options.playbackRate ?? 1;
+
+  source.buffer = buffer;
+  source.playbackRate.value = playbackRate;
+  gain.gain.setValueAtTime(volume, startAt);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration + 0.045);
+  source.connect(gain);
+  gain.connect(audioState.sfxGain);
+  source.start(startAt, startOffset, duration);
+
+  return true;
+}
+
+function playSoundEffect(name, options = {}) {
+  const context = ensureAudioContext();
+
+  if (!context) {
+    return;
+  }
+
+  if (context.state !== "running") {
+    unlockGameAudio()?.then(() => {
+      if (!options.retried) {
+        playSoundEffect(name, { ...options, retried: true });
+      }
+    });
+    return;
+  }
+
+  const now = performance.now();
+  const minGap = options.minGap ?? 0;
+
+  if (minGap > 0 && now - (audioState.lastSfxTimes[name] ?? -Infinity) < minGap) {
+    return;
+  }
+
+  audioState.lastSfxTimes[name] = now;
+
+  switch (name) {
+    case "menuStart":
+      if (playRetroFxSprite("menuStart")) {
+        break;
+      }
+      playTone({ frequency: 220, endFrequency: 660, duration: 0.12, type: "triangle", volume: 0.16 });
+      playTone({ frequency: 440, endFrequency: 990, duration: 0.16, type: "square", volume: 0.08, when: 0.08 });
+      break;
+    case "shoot":
+      playTone({
+        frequency: options.golden ? 520 : 390,
+        endFrequency: options.golden ? 700 : 300,
+        duration: 0.075,
+        type: "sine",
+        volume: options.golden ? 0.055 : 0.04,
+      });
+      playTone({
+        frequency: options.golden ? 780 : 585,
+        endFrequency: options.golden ? 920 : 650,
+        duration: 0.045,
+        type: "triangle",
+        volume: options.golden ? 0.028 : 0.018,
+        when: 0.012,
+      });
+      break;
+    case "obstacleHit":
+      playTone({ frequency: 150, endFrequency: 92, duration: 0.06, type: "triangle", volume: 0.08, when: 0 });
+      playNoise({ duration: 0.055, volume: 0.045, lowpass: 520 });
+      break;
+    case "obstacleBreak":
+      playTone({ frequency: 118, endFrequency: 52, duration: 0.22, type: "triangle", volume: 0.1 });
+      playTone({ frequency: 236, endFrequency: 104, duration: 0.16, type: "sine", volume: 0.045, when: 0.025 });
+      playNoise({ duration: 0.18, volume: 0.08, lowpass: 520 });
+      break;
+    case "applePop":
+      playTone({ frequency: 660, endFrequency: 1320, duration: 0.08, type: "sine", volume: 0.08 });
+      playTone({ frequency: 990, endFrequency: 1480, duration: 0.06, type: "triangle", volume: 0.045, when: 0.045 });
+      break;
+    case "goldenApple":
+      playTone({ frequency: 185, endFrequency: 54, duration: 0.36, type: "sine", volume: 0.13 });
+      playTone({ frequency: 420, endFrequency: 1260, duration: 0.2, type: "triangle", volume: 0.1, when: 0.02 });
+      playTone({ frequency: 840, endFrequency: 1680, duration: 0.14, type: "sine", volume: 0.055, when: 0.12 });
+      playNoise({ duration: 0.26, volume: 0.08, lowpass: 1500, when: 0.03 });
+      break;
+    case "fairyBomb":
+      playTone({ frequency: 92, endFrequency: 24, duration: 0.52, type: "sine", volume: 0.28 });
+      playTone({ frequency: 184, endFrequency: 38, duration: 0.42, type: "sawtooth", volume: 0.18, when: 0.015 });
+      playTone({ frequency: 46, endFrequency: 28, duration: 0.62, type: "triangle", volume: 0.16, when: 0.04 });
+      playNoise({ duration: 0.34, volume: 0.18, lowpass: 520 });
+      break;
+    case "fairyFall":
+      playTone({ frequency: 2200, endFrequency: 110, duration: 1.18, type: "sawtooth", volume: 0.26 });
+      playTone({ frequency: 1100, endFrequency: 56, duration: 1.18, type: "sine", volume: 0.22, when: 0.025 });
+      playTone({ frequency: 140, endFrequency: 42, duration: 1.05, type: "triangle", volume: 0.14, when: 0.08 });
+      playNoise({ duration: 0.95, volume: 0.18, lowpass: 3600 });
+      break;
+    case "goblinSmallDeath":
+      playTone({ frequency: 460, endFrequency: 135, duration: 0.15, type: "sine", volume: 0.07 });
+      playTone({ frequency: 690, endFrequency: 230, duration: 0.13, type: "triangle", volume: 0.045, when: 0.025 });
+      playNoise({ duration: 0.075, volume: 0.028, lowpass: 1800 });
+      break;
+    case "goblinBigDeath":
+      playTone({ frequency: 170, endFrequency: 42, duration: 0.34, type: "sawtooth", volume: 0.13 });
+      playTone({ frequency: 340, endFrequency: 120, duration: 0.22, type: "triangle", volume: 0.06, when: 0.04 });
+      playNoise({ duration: 0.2, volume: 0.08, lowpass: 760 });
+      break;
+    case "bossDeath":
+      playTone({ frequency: 120, endFrequency: 32, duration: 0.7, type: "sawtooth", volume: 0.2 });
+      playTone({ frequency: 520, endFrequency: 1180, duration: 0.38, type: "triangle", volume: 0.1, when: 0.12 });
+      playNoise({ duration: 0.72, volume: 0.18, lowpass: 980 });
+      break;
+    case "bossLaugh":
+      [130, 112, 138, 96].forEach((frequency, index) => {
+        playTone({
+          frequency,
+          endFrequency: frequency * 0.72,
+          duration: 0.16,
+          type: "sawtooth",
+          volume: 0.095,
+          when: index * 0.14,
+        });
+      });
+      playTone({ frequency: 260, endFrequency: 180, duration: 0.7, type: "triangle", volume: 0.035 });
+      break;
+    case "frogActivate":
+      playTone({ frequency: 160, endFrequency: 520, duration: 0.2, type: "triangle", volume: 0.15 });
+      playTone({ frequency: 240, endFrequency: 760, duration: 0.18, type: "square", volume: 0.08, when: 0.08 });
+      break;
+    case "frogBounce":
+      playSoundEffect("frogLand", { minGap: 0 });
+      playSoundEffect("frogJump", { minGap: 0 });
+      break;
+    case "frogJump":
+      playTone({ frequency: 54, endFrequency: 220, duration: 0.28, type: "sawtooth", volume: 0.22 });
+      playTone({ frequency: 108, endFrequency: 330, duration: 0.22, type: "triangle", volume: 0.14, when: 0.03 });
+      playNoise({ duration: 0.12, volume: 0.09, lowpass: 680 });
+      break;
+    case "frogLand":
+      playTone({ frequency: 58, endFrequency: 18, duration: 0.34, type: "sine", volume: 0.34 });
+      playTone({ frequency: 116, endFrequency: 26, duration: 0.25, type: "sawtooth", volume: 0.2, when: 0.015 });
+      playNoise({ duration: 0.24, volume: 0.2, lowpass: 360 });
+      break;
+    case "frogEat":
+      playTone({ frequency: 150, endFrequency: 48, duration: 0.2, type: "sawtooth", volume: 0.14 });
+      playTone({ frequency: 78, endFrequency: 42, duration: 0.16, type: "sine", volume: 0.09, when: 0.035 });
+      playNoise({ duration: 0.09, volume: 0.06, lowpass: 720 });
+      break;
+    case "frogBurp":
+      playTone({ frequency: 96, endFrequency: 58, duration: 0.28, type: "sawtooth", volume: 0.11 });
+      playTone({ frequency: 360, endFrequency: 240, duration: 0.18, type: "sine", volume: 0.055, when: 0.1 });
+      break;
+    case "levelUp":
+      [392, 588, 784, 1176, 1568].forEach((frequency, index) => {
+        playTone({ frequency, endFrequency: frequency * 1.12, duration: 0.13, type: "sine", volume: 0.082, when: index * 0.06 });
+      });
+      playTone({ frequency: 196, endFrequency: 392, duration: 0.42, type: "triangle", volume: 0.045 });
+      break;
+    case "failed":
+      playTone({ frequency: 240, endFrequency: 35, duration: 1.05, type: "sawtooth", volume: 0.16 });
+      playTone({ frequency: 120, endFrequency: 28, duration: 1.25, type: "sine", volume: 0.11, when: 0.08 });
+      playNoise({ duration: 0.5, volume: 0.07, lowpass: 560, when: 0.04 });
+      break;
+    case "victory":
+      playTone({ frequency: 165, endFrequency: 55, duration: 0.65, type: "sine", volume: 0.1 });
+      [392, 523, 659, 784, 1046, 1318].forEach((frequency, index) => {
+        playTone({ frequency, endFrequency: frequency * 1.05, duration: 0.2, type: "triangle", volume: 0.1, when: 0.18 + index * 0.085 });
+      });
+      break;
+    case "timeWarp":
+      playTone({ frequency: 520, endFrequency: 58, duration: 0.9, type: "sine", volume: 0.11 });
+      playTone({ frequency: 1040, endFrequency: 116, duration: 0.9, type: "triangle", volume: 0.045, when: 0.02 });
+      playNoise({ duration: 0.65, volume: 0.045, lowpass: 900, when: 0.08 });
+      break;
+    case "timerGlitch":
+      playTone({ frequency: 1200, endFrequency: 90, duration: 0.13, type: "square", volume: 0.18 });
+      playTone({ frequency: 190, endFrequency: 1800, duration: 0.11, type: "square", volume: 0.12, when: 0.05 });
+      playTone({ frequency: 420, endFrequency: 210, duration: 0.16, type: "triangle", volume: 0.09, when: 0.11 });
+      playNoise({ duration: 0.22, volume: 0.16, lowpass: 3400 });
+      break;
+    default:
+      break;
+  }
 }
 
 function wait(duration) {
@@ -497,6 +824,8 @@ function waitForWizardAnswer() {
     const buttons = document.querySelectorAll("[data-wizard-answer]");
 
     const handleAnswer = () => {
+      unlockGameAudio();
+
       buttons.forEach((button) => {
         button.removeEventListener("click", handleAnswer);
       });
@@ -517,6 +846,8 @@ function waitForScreenPress() {
         return;
       }
 
+      unlockGameAudio();
+      playSoundEffect("menuStart");
       document.removeEventListener("pointerdown", handlePress);
       resolve();
     };
@@ -693,6 +1024,7 @@ async function playMiniGameIntroSequence() {
   loadingScene.classList.remove("is-ending");
   loadingState.activeSurface = "miniGameIntro";
   showActiveSurface();
+  loadRetroFxSound();
 
   await waitForScreenPress();
   await waitForLandscape();
@@ -722,6 +1054,7 @@ function startMiniGamePrelude() {
   miniGameState.status = "prelude";
   miniGameState.isRunning = true;
   miniGameState.preludeStartedAt = performance.now();
+  miniGameState.preludeTimerGlitchSoundPlayed = false;
   miniGameState.preludeObstacles = createForestObstacles();
   miniGameState.lake = createMiniGameLake(miniGameState.preludeObstacles);
   loadingState.activeSurface = "miniGame";
@@ -925,8 +1258,13 @@ function drawPreludeTimer(context, elapsed) {
   const x = window.innerWidth / 2;
   const y = window.innerHeight / 2 + (25 - window.innerHeight / 2) * eased;
   const scale = 2.4 + (1 - 2.4) * eased;
-  const glitchActive = elapsed > 9400 && elapsed < 9550;
+  const glitchActive = elapsed > 9300 && elapsed < 9700;
   const glitchOffset = glitchActive ? (Math.random() - 0.5) * 5 : 0;
+
+  if (elapsed > 9250 && !miniGameState.preludeTimerGlitchSoundPlayed) {
+    miniGameState.preludeTimerGlitchSoundPlayed = true;
+    playSoundEffect("timerGlitch", { minGap: 500 });
+  }
 
   context.save();
   context.globalAlpha = fade;
@@ -1121,6 +1459,7 @@ function handleMiniGamePress(event) {
     return;
   }
 
+  unlockGameAudio();
   const canvasRect = miniGameState.canvas.getBoundingClientRect();
   miniGameState.aimTarget = {
     x: event.clientX - canvasRect.left,
@@ -1188,6 +1527,7 @@ function fireMiniGameBullet(now, force = false) {
   });
   ejectMushroomShell(muzzle, direction);
   triggerCannonFireShake();
+  playSoundEffect("shoot", { golden: miniGameState.level >= 5, minGap: miniGameState.level >= 5 ? 42 : 70 });
 }
 
 function ejectMushroomShell(muzzle, direction) {
@@ -1352,6 +1692,8 @@ function startMiniGameFinish(kind, x, y) {
     startedAt: performance.now(),
     resolved: false,
   };
+  playSoundEffect("timeWarp", { minGap: 1200 });
+  playSoundEffect(kind === "victory" ? "victory" : "failed", { minGap: 1200 });
   triggerScreenShake(MINI_GAME_FINISH_EFFECT_MS, kind === "victory" ? 13 : 16);
 }
 
@@ -1411,6 +1753,7 @@ function startBossPhase() {
   }
 
   miniGameState.bossSpawned = true;
+  playSoundEffect("bossLaugh", { minGap: 1000 });
   miniGameState.apples = [];
   miniGameState.goblins.push({
     x: window.innerWidth / 2,
@@ -1535,6 +1878,7 @@ function updateFrogs(timestamp) {
       frog.hasBurped = true;
       frog.burpAt = timestamp;
       triggerScreenShake(220, 4.5);
+      playSoundEffect("frogBurp", { minGap: 500 });
       frog.bubbles = Array.from({ length: 3 }, (_, index) => ({
         x: 8 + index * 5,
         y: -5 - Math.random() * 6,
@@ -1564,6 +1908,7 @@ function updateRampagingFrog(frog, age, duration) {
     frog.direction = frog.hopTarget.x >= frog.x ? 1 : -1;
     triggerScreenShake(230, 8.5);
     createGroundBounce(frog.x, floorY + 18);
+    playSoundEffect("frogBounce", { minGap: 0 });
   }
 
   const target = frog.hopTarget || getFrogHopTarget(frog);
@@ -1627,6 +1972,7 @@ function explodeFairyBomb(bomb) {
   bomb.state = "exploded";
   bomb.explodedAt = performance.now();
   triggerScreenShake(360, 8);
+  playSoundEffect("fairyBomb", { minGap: 0 });
 
   const blastRadius = MINI_GAME_FAIRY_BOMB_RADIUS;
 
@@ -1763,6 +2109,7 @@ function knockTreesInBossPath(boss) {
       obstacle.isKnocked = true;
       obstacle.knockStartedAt = performance.now();
       obstacle.knockDirection = obstacle.x < boss.x ? -1 : 1;
+      playSoundEffect("obstacleBreak", { minGap: 120 });
     }
   });
 }
@@ -1774,6 +2121,7 @@ function damageForestObstacle(obstacle) {
 
   obstacle.health = Math.max(0, (obstacle.health ?? MINI_GAME_OBSTACLE_HEALTH) - 1);
   createHitMarker(obstacle.x, obstacle.y - obstacle.radius * 1.5, `-${1}`, "#9cff9c", 11);
+  playSoundEffect("obstacleHit", { minGap: 45 });
 
   if (obstacle.health <= 0) {
     obstacle.isDestroyed = true;
@@ -1782,7 +2130,8 @@ function damageForestObstacle(obstacle) {
     obstacle.respawnAt = obstacle.destroyedAt + MINI_GAME_OBSTACLE_RESPAWN_MS;
     obstacle.knockStartedAt = obstacle.destroyedAt;
     obstacle.knockDirection = Math.random() > 0.5 ? 1 : -1;
-    createGoblinDeath(obstacle.x, obstacle.y, obstacle.radius);
+    createGoblinDeath(obstacle.x, obstacle.y, obstacle.radius, "obstacle");
+    playSoundEffect("obstacleBreak", { minGap: 80 });
   }
 }
 
@@ -1876,6 +2225,7 @@ function checkMiniGameHits() {
         if (apple.type === "golden") {
           triggerGoldenAppleBlast(apple.x, apple.y);
         } else {
+          playSoundEffect("applePop", { minGap: 80 });
           collectUpgradeApple();
         }
 
@@ -1902,6 +2252,7 @@ function checkMiniGameHits() {
         frog.direction = frog.x < window.innerWidth / 2 ? 1 : -1;
         frog.groundY = frog.y;
         createHitMarker(frog.x, frog.y - 18, "420", "#ff6dff", 18);
+        playSoundEffect("frogActivate", { minGap: 250 });
         break;
       }
     }
@@ -1919,6 +2270,7 @@ function checkMiniGameHits() {
 
         if (goblin.isBoss && miniGameState.level < 5) {
           createGoblinHitSpark(goblin.x, goblin.y, goblin.size);
+          playSoundEffect("obstacleHit", { minGap: 60 });
           break;
         }
 
@@ -1936,6 +2288,7 @@ function checkMiniGameHits() {
           }
         } else {
           createGoblinHitSpark(goblin.x, goblin.y, goblin.size);
+          playSoundEffect("obstacleHit", { minGap: 70 });
         }
 
         break;
@@ -1968,6 +2321,7 @@ function createLevelPulse(isGolden) {
   const turret = getTurretPosition();
 
   triggerScreenShake(isGolden ? 640 : 420, isGolden ? 12 : 8);
+  playSoundEffect("levelUp", { minGap: 450 });
   miniGameState.pulses.push({
     x: turret.x,
     y: turret.y - 16,
@@ -1996,6 +2350,8 @@ function createFairyBombDrop() {
   const maxX = Math.min(window.innerWidth - 30, turret.x + spreadX);
   const minY = Math.max(44, turret.y - window.innerHeight * 0.48);
   const maxY = Math.max(minY + 40, turret.y - 48);
+
+  playSoundEffect("fairyFall", { minGap: 0 });
 
   for (let index = 0; index < MINI_GAME_FAIRY_BOMB_COUNT; index += 1) {
     const targetY = minY + Math.random() * (maxY - minY);
@@ -2032,6 +2388,7 @@ function createGoblinHitSpark(x, y, size) {
 
 function triggerGoldenAppleBlast(x, y) {
   triggerScreenShake(760, 16);
+  playSoundEffect("goldenApple", { minGap: 320 });
   miniGameState.explosions.push({
     x,
     y,
@@ -2089,7 +2446,17 @@ function endMiniGameWithVictory(x, y) {
   startMiniGameFinish("victory", x, y);
 }
 
-function createGoblinDeath(x, y, size) {
+function createGoblinDeath(x, y, size, soundType = "goblin") {
+  if (soundType === "goblin") {
+    if (size >= 52) {
+      playSoundEffect("bossDeath", { minGap: 900 });
+    } else if (size >= 30) {
+      playSoundEffect("goblinBigDeath", { minGap: 90 });
+    } else {
+      playSoundEffect("goblinSmallDeath", { minGap: 55 });
+    }
+  }
+
   miniGameState.explosions.push({
     x,
     y,
@@ -3328,6 +3695,7 @@ function bootstrap() {
   prepareLoadingScene();
 
   lockViewportInput();
+  document.addEventListener("pointerdown", unlockGameAudio, { passive: true });
 
   window.TheLostRelic = {
     audio: audioState,
