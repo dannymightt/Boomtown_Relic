@@ -42,12 +42,15 @@ const MINI_GAME_GOBLIN_SPAWN_MS = 1080;
 const MINI_GAME_DEATH_ANIMATION_MS = 420;
 const MINI_GAME_DIFFICULTY_RAMP_MS = 60000;
 const MINI_GAME_OBSTACLE_COUNT = 8;
+const MINI_GAME_OBSTACLE_HEALTH = 5;
+const MINI_GAME_OBSTACLE_RESPAWN_MS = 5000;
 const MINI_GAME_DURATION_MS = 60000;
 const MINI_GAME_APPLE_SPAWN_MS = 3600;
 const MINI_GAME_GOLDEN_APPLE_COUNT = 2;
 const MINI_GAME_GOLDEN_APPLE_RADIUS = 120;
 const MINI_GAME_GOLDEN_APPLE_START_MS = 30000;
 const MINI_GAME_FAIL_RESTART_MS = 1000;
+const MINI_GAME_FINISH_EFFECT_MS = 2200;
 const MINI_GAME_BIG_GOBLIN_START_MS = 15000;
 const MINI_GAME_LEVEL_REQUIREMENTS = [0, 2, 3, 4, 5];
 const MINI_GAME_BOSS_HEALTH = 80;
@@ -55,6 +58,9 @@ const MINI_GAME_BOSS_SPEED = 34;
 const MINI_GAME_BOSS_TREE_KNOCK_MS = 520;
 const MINI_GAME_FAIRY_BOMB_COUNT = 5;
 const MINI_GAME_FAIRY_BOMB_RADIUS = 108;
+const MINI_GAME_FROG_EVENT_START_MS = 18000;
+const MINI_GAME_FROG_EVENT_GAP_MS = 19000;
+const MINI_GAME_MAX_FROG_EVENTS = 2;
 const MINI_GAME_INTRO_FADE_MS = 700;
 const MINI_GAME_INSTRUCTION_SEQUENCE_MS = 11800;
 const TEST_START_AT_MINI_GAME_INTRO = true;
@@ -98,6 +104,10 @@ const miniGameState = {
   pulses: [],
   fairyBombs: [],
   levelMessages: [],
+  hitMarkers: [],
+  appleSplatters: [],
+  lake: null,
+  frogs: [],
   trails: [],
   shells: [],
   goldenAppleSpawnTimes: [],
@@ -107,6 +117,8 @@ const miniGameState = {
   lastFireTime: -MINI_GAME_FIRE_COOLDOWN_MS,
   lastSpawnTime: 0,
   lastAppleSpawnTime: 0,
+  nextFrogSpawnAt: 0,
+  frogSpawnCount: 0,
   startedAt: 0,
   level: 1,
   applesTowardNextLevel: 0,
@@ -117,6 +129,7 @@ const miniGameState = {
   gameplayFadeStartedAt: 0,
   shakeUntil: 0,
   shakeIntensity: 0,
+  finishEffect: null,
   isRunning: false,
   turretAngle: -Math.PI / 2,
   aimTarget: null,
@@ -171,28 +184,6 @@ function getOrientation() {
   return window.innerWidth >= window.innerHeight
     ? ORIENTATION.LANDSCAPE
     : ORIENTATION.PORTRAIT;
-}
-
-async function requestFullscreenLandscape() {
-  const root = document.documentElement;
-
-  if (root.requestFullscreen && !document.fullscreenElement) {
-    await root.requestFullscreen();
-  }
-
-  if (screen.orientation?.lock) {
-    await screen.orientation.lock(ORIENTATION.LANDSCAPE);
-  }
-}
-
-function requestFullscreenFromUserGesture() {
-  if (!loadingState.isLandscape) {
-    return;
-  }
-
-  requestFullscreenLandscape().catch(() => {
-    // Mobile browsers can reject fullscreen/orientation lock; the game still runs normally.
-  });
 }
 
 function lockViewportInput() {
@@ -506,8 +497,6 @@ function waitForWizardAnswer() {
     const buttons = document.querySelectorAll("[data-wizard-answer]");
 
     const handleAnswer = () => {
-      requestFullscreenFromUserGesture();
-
       buttons.forEach((button) => {
         button.removeEventListener("click", handleAnswer);
       });
@@ -528,7 +517,6 @@ function waitForScreenPress() {
         return;
       }
 
-      requestFullscreenFromUserGesture();
       document.removeEventListener("pointerdown", handlePress);
       resolve();
     };
@@ -735,6 +723,7 @@ function startMiniGamePrelude() {
   miniGameState.isRunning = true;
   miniGameState.preludeStartedAt = performance.now();
   miniGameState.preludeObstacles = createForestObstacles();
+  miniGameState.lake = createMiniGameLake(miniGameState.preludeObstacles);
   loadingState.activeSurface = "miniGame";
   showActiveSurface();
   resizeMiniGameCanvas();
@@ -779,14 +768,21 @@ function startMiniGame() {
   miniGameState.pulses = [];
   miniGameState.fairyBombs = [];
   miniGameState.levelMessages = [];
+  miniGameState.hitMarkers = [];
+  miniGameState.appleSplatters = [];
+  miniGameState.frogs = [];
   miniGameState.trails = [];
   miniGameState.shells = [];
   miniGameState.obstacles = miniGameState.preludeObstacles.length > 0 ? miniGameState.preludeObstacles : createForestObstacles();
+  miniGameState.lake = miniGameState.lake || createMiniGameLake(miniGameState.obstacles);
   miniGameState.preludeObstacles = [];
   miniGameState.lastFrameTime = performance.now();
   miniGameState.lastSpawnTime = miniGameState.lastFrameTime;
   miniGameState.lastAppleSpawnTime = miniGameState.lastFrameTime;
   miniGameState.startedAt = miniGameState.lastFrameTime;
+  miniGameState.nextFrogSpawnAt =
+    miniGameState.startedAt + MINI_GAME_FROG_EVENT_START_MS + Math.random() * 6000;
+  miniGameState.frogSpawnCount = 0;
   miniGameState.gameplayFadeStartedAt = miniGameState.preludeStartedAt + 11200;
   miniGameState.lastFireTime = -MINI_GAME_FIRE_COOLDOWN_MS;
   miniGameState.goldenAppleSpawnTimes = createGoldenAppleSpawnTimes(miniGameState.startedAt);
@@ -796,6 +792,7 @@ function startMiniGame() {
   miniGameState.bossSpawned = false;
   miniGameState.shakeUntil = 0;
   miniGameState.shakeIntensity = 0;
+  miniGameState.finishEffect = null;
   miniGameState.turretAngle = -Math.PI / 2;
   miniGameState.aimTarget = {
     x: window.innerWidth / 2,
@@ -965,6 +962,7 @@ function drawPreludeArenaReveal(context, elapsed) {
 
   context.save();
   context.globalAlpha = opacity;
+  drawLake(context);
   drawLevelPulses(context);
   miniGameState.preludeObstacles.forEach((obstacle) => {
     if (obstacle.type === "tree") {
@@ -1057,6 +1055,8 @@ function createForestObstacles() {
         type: Math.random() > 0.48 ? "tree" : "mushroom",
         sway: Math.random() * Math.PI * 2,
       };
+      candidate.health = MINI_GAME_OBSTACLE_HEALTH;
+      candidate.maxHealth = MINI_GAME_OBSTACLE_HEALTH;
       const farFromTurret = Math.hypot(candidate.x - turret.x, candidate.y - turret.y) > minDistanceFromTurret;
       const farFromOthers = obstacles.every(
         (existing) => Math.hypot(candidate.x - existing.x, candidate.y - existing.y) > candidate.radius + existing.radius + 28
@@ -1075,6 +1075,40 @@ function createForestObstacles() {
   return obstacles;
 }
 
+function createMiniGameLake(obstacles) {
+  const turret = getTurretPosition();
+  let lake = null;
+  let attempts = 0;
+
+  while (!lake && attempts < 80) {
+    attempts += 1;
+
+    const candidate = {
+      x: 70 + Math.random() * (window.innerWidth - 140),
+      y: 58 + Math.random() * Math.max(60, window.innerHeight - 220),
+      radiusX: 58 + Math.random() * 18,
+      radiusY: 32 + Math.random() * 10,
+    };
+    const farFromTurret = Math.hypot(candidate.x - turret.x, candidate.y - turret.y) > 130;
+    const clearOfObstacles = obstacles.every(
+      (obstacle) =>
+        Math.hypot(candidate.x - obstacle.x, candidate.y - obstacle.y) >
+        candidate.radiusX + obstacle.radius + 18
+    );
+
+    if (farFromTurret && clearOfObstacles) {
+      lake = candidate;
+    }
+  }
+
+  return lake || {
+    x: window.innerWidth * 0.22,
+    y: window.innerHeight * 0.34,
+    radiusX: 62,
+    radiusY: 36,
+  };
+}
+
 function getTurretPosition() {
   return {
     x: window.innerWidth / 2,
@@ -1087,7 +1121,6 @@ function handleMiniGamePress(event) {
     return;
   }
 
-  requestFullscreenFromUserGesture();
   const canvasRect = miniGameState.canvas.getBoundingClientRect();
   miniGameState.aimTarget = {
     x: event.clientX - canvasRect.left,
@@ -1203,7 +1236,9 @@ function updateMiniGame(timestamp) {
   const deltaSeconds = Math.min((timestamp - miniGameState.lastFrameTime) / 1000, 0.033);
   miniGameState.lastFrameTime = timestamp;
 
-  if (loadingState.isLandscape && miniGameState.status === "playing") {
+  if (loadingState.isLandscape && miniGameState.status === "finishing") {
+    updateMiniGameFinish(timestamp, deltaSeconds);
+  } else if (loadingState.isLandscape && miniGameState.status === "playing") {
     if (timestamp - miniGameState.startedAt >= MINI_GAME_DURATION_MS) {
       startBossPhase();
     }
@@ -1214,8 +1249,11 @@ function updateMiniGame(timestamp) {
 
     maybeSpawnGoblin(timestamp);
     maybeSpawnApples(timestamp);
+    maybeSpawnFrogEvent(timestamp);
+    respawnDestroyedObstacles(timestamp);
     moveBullets(deltaSeconds);
     moveFairyBombs(deltaSeconds);
+    updateFrogs(timestamp);
     moveGoblins(deltaSeconds);
     checkMiniGameHits();
     checkGoblinContact();
@@ -1267,12 +1305,62 @@ function maybeSpawnGoblin(timestamp) {
   });
 }
 
+function updateMiniGameFinish(timestamp, deltaSeconds) {
+  const effect = miniGameState.finishEffect;
+  const slowDeltaSeconds = deltaSeconds * 0.16;
+
+  moveBullets(slowDeltaSeconds);
+  moveFairyBombs(slowDeltaSeconds);
+  updateFrogs(timestamp);
+  moveGoblins(slowDeltaSeconds);
+  trimMiniGameObjects();
+
+  if (!effect || effect.resolved || timestamp - effect.startedAt < MINI_GAME_FINISH_EFFECT_MS) {
+    return;
+  }
+
+  effect.resolved = true;
+  miniGameState.status = effect.kind === "victory" ? "victory" : "failed";
+  miniGameState.bullets = [];
+
+  if (effect.kind === "victory") {
+    miniGameState.goblins = [];
+    miniGameState.apples = [];
+    return;
+  }
+
+  window.setTimeout(() => {
+    if (miniGameState.status === "failed") {
+      startMiniGame();
+    }
+  }, MINI_GAME_FAIL_RESTART_MS);
+}
+
+function startMiniGameFinish(kind, x, y) {
+  if (miniGameState.status !== "playing") {
+    return;
+  }
+
+  const turret = getTurretPosition();
+
+  miniGameState.status = "finishing";
+  miniGameState.bullets = [];
+  miniGameState.finishEffect = {
+    kind,
+    x: Number.isFinite(x) ? x : turret.x,
+    y: Number.isFinite(y) ? y : turret.y,
+    startedAt: performance.now(),
+    resolved: false,
+  };
+  triggerScreenShake(MINI_GAME_FINISH_EFFECT_MS, kind === "victory" ? 13 : 16);
+}
+
 function maybeSpawnApples(timestamp) {
   if (miniGameState.bossSpawned || timestamp - miniGameState.startedAt >= MINI_GAME_DURATION_MS) {
     return;
   }
 
-  if (timestamp - miniGameState.lastAppleSpawnTime >= MINI_GAME_APPLE_SPAWN_MS) {
+  if (miniGameState.level < 5 && timestamp - miniGameState.lastAppleSpawnTime >= MINI_GAME_APPLE_SPAWN_MS) {
     miniGameState.lastAppleSpawnTime = timestamp;
     spawnApple("normal");
   }
@@ -1283,6 +1371,38 @@ function maybeSpawnApples(timestamp) {
       spawnApple("golden");
     }
   }
+}
+
+function maybeSpawnFrogEvent(timestamp) {
+  if (
+    !miniGameState.lake ||
+    miniGameState.bossSpawned ||
+    miniGameState.frogSpawnCount >= MINI_GAME_MAX_FROG_EVENTS ||
+    timestamp - miniGameState.startedAt >= MINI_GAME_DURATION_MS
+  ) {
+    return;
+  }
+
+  if (timestamp < miniGameState.nextFrogSpawnAt) {
+    return;
+  }
+
+  miniGameState.frogSpawnCount += 1;
+  miniGameState.nextFrogSpawnAt = timestamp + MINI_GAME_FROG_EVENT_GAP_MS + Math.random() * 8000;
+  miniGameState.frogs.push({
+    x: miniGameState.lake.x + miniGameState.lake.radiusX * 0.26,
+    y: miniGameState.lake.y - miniGameState.lake.radiusY * 0.08,
+    originX: miniGameState.lake.x + miniGameState.lake.radiusX * 0.26,
+    originY: miniGameState.lake.y - miniGameState.lake.radiusY * 0.08,
+    radius: 12,
+    state: "waiting",
+    hasEaten: false,
+    lastBounceStep: -1,
+    eatenGoblinIds: new Set(),
+    bubbles: [],
+    phase: Math.random() * Math.PI * 2,
+    startedAt: timestamp,
+  });
 }
 
 function startBossPhase() {
@@ -1324,11 +1444,13 @@ function spawnApple(type) {
     const clearOfObstacles = miniGameState.obstacles.every(
       (obstacle) =>
         obstacle.isKnocked ||
+        obstacle.isDestroyed ||
         Math.hypot(candidate.x - obstacle.x, candidate.y - obstacle.y) > candidate.radius + obstacle.radius + 12
     );
     const hasOpenShot = miniGameState.obstacles.every(
       (obstacle) =>
         obstacle.isKnocked ||
+        obstacle.isDestroyed ||
         distancePointToSegment(obstacle, turret, candidate) > obstacle.radius + candidate.radius + 8
     );
 
@@ -1393,6 +1515,114 @@ function moveFairyBombs(deltaSeconds) {
   });
 }
 
+function updateFrogs(timestamp) {
+  miniGameState.frogs.forEach((frog) => {
+    frog.phase += 0.14;
+
+    if (frog.state !== "giant") {
+      return;
+    }
+
+    const age = timestamp - frog.hitAt;
+    const rampageDuration = 6200;
+
+    if (age < rampageDuration) {
+      updateRampagingFrog(frog, age, rampageDuration);
+      return;
+    }
+
+    if (!frog.hasBurped) {
+      frog.hasBurped = true;
+      frog.burpAt = timestamp;
+      triggerScreenShake(220, 4.5);
+      frog.bubbles = Array.from({ length: 3 }, (_, index) => ({
+        x: 8 + index * 5,
+        y: -5 - Math.random() * 6,
+        vx: 12 + index * 7 + Math.random() * 7,
+        vy: -10 - Math.random() * 12,
+        size: 2.5 + Math.random() * 1.8,
+        delay: index * 120,
+      }));
+    }
+  });
+}
+
+function updateRampagingFrog(frog, age, duration) {
+  const bounceDuration = 720;
+  const bounceStep = Math.floor(age / bounceDuration);
+  const bounceProgress = (age % bounceDuration) / bounceDuration;
+  const floorY = Math.min(window.innerHeight - 70, Math.max(72, frog.groundY || frog.originY));
+  const arc = Math.sin(bounceProgress * Math.PI);
+  const stomp = bounceProgress < 0.12 ? (0.12 - bounceProgress) * 32 : 0;
+
+  if (bounceStep !== frog.lastBounceStep) {
+    frog.lastBounceStep = bounceStep;
+    frog.hopStartX = frog.x;
+    frog.hopStartY = floorY;
+    frog.direction = getFrogSafeDirection(frog);
+    frog.hopTarget = getFrogHopTarget(frog);
+    frog.direction = frog.hopTarget.x >= frog.x ? 1 : -1;
+    triggerScreenShake(230, 8.5);
+    createGroundBounce(frog.x, floorY + 18);
+  }
+
+  const target = frog.hopTarget || getFrogHopTarget(frog);
+  const eased = 1 - Math.pow(1 - bounceProgress, 2);
+  frog.x = Math.max(34, Math.min(window.innerWidth - 34, (frog.hopStartX ?? frog.x) + (target.x - (frog.hopStartX ?? frog.x)) * eased));
+  frog.y = Math.max(54, Math.min(window.innerHeight - 66, (frog.hopStartY ?? floorY) + (target.y - (frog.hopStartY ?? floorY)) * eased - arc * 38 + stomp));
+
+  frogEatGoblins(frog, 84);
+}
+
+function getFrogHopTarget(frog) {
+  const margin = 72;
+  const safeDirection = getFrogSafeDirection(frog);
+
+  if (safeDirection !== (frog.direction || 1)) {
+    frog.direction = safeDirection;
+    return {
+      x: Math.min(window.innerWidth - margin, Math.max(margin, frog.x + safeDirection * 118)),
+      y: Math.min(window.innerHeight - 78, Math.max(70, frog.y + (Math.random() - 0.5) * 36)),
+    };
+  }
+
+  const candidates = miniGameState.goblins
+    .filter((goblin) => !goblin.isBoss)
+    .map((goblin) => ({
+      goblin,
+      distance: Math.hypot(goblin.x - frog.x, goblin.y - frog.y),
+    }))
+    .sort((a, b) => a.distance - b.distance);
+
+  if (candidates.length > 0 && candidates[0].distance < 260) {
+    const targetX = Math.min(window.innerWidth - margin, Math.max(margin, candidates[0].goblin.x));
+    return {
+      x: targetX,
+      y: Math.min(window.innerHeight - 78, Math.max(70, candidates[0].goblin.y + 16)),
+    };
+  }
+
+  const direction = frog.direction || 1;
+  return {
+    x: Math.min(window.innerWidth - margin, Math.max(margin, frog.x + direction * 86)),
+    y: Math.min(window.innerHeight - 78, Math.max(70, frog.y + (Math.random() - 0.5) * 44)),
+  };
+}
+
+function getFrogSafeDirection(frog) {
+  const margin = 72;
+
+  if (frog.x <= margin) {
+    return 1;
+  }
+
+  if (frog.x >= window.innerWidth - margin) {
+    return -1;
+  }
+
+  return frog.direction || 1;
+}
+
 function explodeFairyBomb(bomb) {
   bomb.state = "exploded";
   bomb.explodedAt = performance.now();
@@ -1414,6 +1644,57 @@ function explodeFairyBomb(bomb) {
   }
 }
 
+function createHitMarker(x, y, text = "HIT", color = "#ffffff", size = 16) {
+  miniGameState.hitMarkers.push({
+    x,
+    y,
+    text,
+    color,
+    size,
+    startedAt: performance.now(),
+  });
+}
+
+function createAppleSplatter(x, y, isGolden = false) {
+  miniGameState.appleSplatters.push({
+    x,
+    y,
+    color: "#e04444",
+    startedAt: performance.now(),
+    drops: Array.from({ length: isGolden ? 7 : 6 }, () => ({
+      angle: Math.random() * Math.PI * 2,
+      speed: 7 + Math.random() * 12,
+      size: 2 + Math.random() * 2.5,
+    })),
+  });
+}
+
+function frogEatGoblins(frog, biteRadius = 92) {
+  for (let goblinIndex = miniGameState.goblins.length - 1; goblinIndex >= 0; goblinIndex -= 1) {
+    const goblin = miniGameState.goblins[goblinIndex];
+
+    if (goblin.isBoss || frog.eatenGoblinIds.has(goblin)) {
+      continue;
+    }
+
+    if (Math.hypot(goblin.x - frog.x, goblin.y - frog.y) <= biteRadius + goblin.size) {
+      frog.eatenGoblinIds.add(goblin);
+      miniGameState.goblins.splice(goblinIndex, 1);
+      createGoblinDeath(goblin.x, goblin.y, goblin.size);
+    }
+  }
+}
+
+function createGroundBounce(x, y, type = "dust") {
+  miniGameState.scorchMarks.push({
+    x,
+    y,
+    radius: 18,
+    type,
+    createdAt: performance.now(),
+  });
+}
+
 function moveGoblins(deltaSeconds) {
   const turret = getTurretPosition();
 
@@ -1430,7 +1711,7 @@ function moveGoblins(deltaSeconds) {
     let dy = turret.y - goblin.y;
 
     miniGameState.obstacles.forEach((obstacle) => {
-      if (obstacle.isKnocked) {
+      if (obstacle.isKnocked || obstacle.isDestroyed) {
         return;
       }
 
@@ -1486,14 +1767,97 @@ function knockTreesInBossPath(boss) {
   });
 }
 
+function damageForestObstacle(obstacle) {
+  if (obstacle.isKnocked || obstacle.isDestroyed) {
+    return;
+  }
+
+  obstacle.health = Math.max(0, (obstacle.health ?? MINI_GAME_OBSTACLE_HEALTH) - 1);
+  createHitMarker(obstacle.x, obstacle.y - obstacle.radius * 1.5, `-${1}`, "#9cff9c", 11);
+
+  if (obstacle.health <= 0) {
+    obstacle.isDestroyed = true;
+    obstacle.isKnocked = true;
+    obstacle.destroyedAt = performance.now();
+    obstacle.respawnAt = obstacle.destroyedAt + MINI_GAME_OBSTACLE_RESPAWN_MS;
+    obstacle.knockStartedAt = obstacle.destroyedAt;
+    obstacle.knockDirection = Math.random() > 0.5 ? 1 : -1;
+    createGoblinDeath(obstacle.x, obstacle.y, obstacle.radius);
+  }
+}
+
+function respawnDestroyedObstacles(timestamp) {
+  miniGameState.obstacles.forEach((obstacle) => {
+    if (!obstacle.isDestroyed || timestamp < obstacle.respawnAt) {
+      return;
+    }
+
+    const replacement = createObstacleAwayFromObjects(obstacle);
+    obstacle.x = replacement.x;
+    obstacle.y = replacement.y;
+    obstacle.radius = replacement.radius;
+    obstacle.sway = replacement.sway;
+    obstacle.health = MINI_GAME_OBSTACLE_HEALTH;
+    obstacle.maxHealth = MINI_GAME_OBSTACLE_HEALTH;
+    obstacle.isDestroyed = false;
+    obstacle.isKnocked = false;
+    obstacle.destroyedAt = null;
+    obstacle.respawnAt = null;
+    obstacle.knockStartedAt = null;
+    obstacle.knockDirection = 1;
+  });
+}
+
+function createObstacleAwayFromObjects(fallbackObstacle) {
+  const turret = getTurretPosition();
+  let candidate = null;
+  let attempts = 0;
+
+  while (!candidate && attempts < 80) {
+    attempts += 1;
+    const possible = {
+      x: 42 + Math.random() * (window.innerWidth - 84),
+      y: 38 + Math.random() * (window.innerHeight - 130),
+      radius: 16 + Math.random() * 12,
+      sway: Math.random() * Math.PI * 2,
+    };
+    const farFromTurret = Math.hypot(possible.x - turret.x, possible.y - turret.y) > 96;
+    const farFromObstacles = miniGameState.obstacles.every(
+      (obstacle) =>
+        obstacle === fallbackObstacle ||
+        obstacle.isDestroyed ||
+        Math.hypot(possible.x - obstacle.x, possible.y - obstacle.y) > possible.radius + obstacle.radius + 28
+    );
+    const farFromLake =
+      !miniGameState.lake ||
+      Math.hypot(possible.x - miniGameState.lake.x, possible.y - miniGameState.lake.y) >
+        possible.radius + miniGameState.lake.radiusX + 16;
+
+    if (farFromTurret && farFromObstacles && farFromLake) {
+      candidate = possible;
+    }
+  }
+
+  return candidate || {
+    x: fallbackObstacle.x,
+    y: fallbackObstacle.y,
+    radius: fallbackObstacle.radius,
+    sway: Math.random() * Math.PI * 2,
+  };
+}
+
 function checkMiniGameHits() {
   for (let bulletIndex = miniGameState.bullets.length - 1; bulletIndex >= 0; bulletIndex -= 1) {
     const bullet = miniGameState.bullets[bulletIndex];
-      const blocked = miniGameState.obstacles.some(
-      (obstacle) => !obstacle.isKnocked && Math.hypot(obstacle.x - bullet.x, obstacle.y - bullet.y) <= obstacle.radius + bullet.radius
+    const blockedObstacle = miniGameState.obstacles.find(
+      (obstacle) =>
+        !obstacle.isKnocked &&
+        !obstacle.isDestroyed &&
+        Math.hypot(obstacle.x - bullet.x, obstacle.y - bullet.y) <= obstacle.radius + bullet.radius
     );
 
-    if (blocked) {
+    if (blockedObstacle) {
+      damageForestObstacle(blockedObstacle);
       miniGameState.bullets.splice(bulletIndex, 1);
     }
   }
@@ -1507,6 +1871,7 @@ function checkMiniGameHits() {
       if (Math.hypot(apple.x - bullet.x, apple.y - bullet.y) <= apple.radius + bullet.radius) {
         miniGameState.apples.splice(appleIndex, 1);
         miniGameState.bullets.splice(bulletIndex, 1);
+        createAppleSplatter(apple.x, apple.y, apple.type === "golden");
 
         if (apple.type === "golden") {
           triggerGoldenAppleBlast(apple.x, apple.y);
@@ -1514,6 +1879,29 @@ function checkMiniGameHits() {
           collectUpgradeApple();
         }
 
+        break;
+      }
+    }
+  }
+
+  for (let frogIndex = miniGameState.frogs.length - 1; frogIndex >= 0; frogIndex -= 1) {
+    const frog = miniGameState.frogs[frogIndex];
+
+    if (frog.state !== "waiting") {
+      continue;
+    }
+
+    for (let bulletIndex = miniGameState.bullets.length - 1; bulletIndex >= 0; bulletIndex -= 1) {
+      const bullet = miniGameState.bullets[bulletIndex];
+
+      if (Math.hypot(frog.x - bullet.x, frog.y - bullet.y) <= frog.radius + bullet.radius) {
+        miniGameState.bullets.splice(bulletIndex, 1);
+        triggerScreenShake(180, 3.5);
+        frog.state = "giant";
+        frog.hitAt = performance.now();
+        frog.direction = frog.x < window.innerWidth / 2 ? 1 : -1;
+        frog.groundY = frog.y;
+        createHitMarker(frog.x, frog.y - 18, "420", "#ff6dff", 18);
         break;
       }
     }
@@ -1535,13 +1923,16 @@ function checkMiniGameHits() {
         }
 
         goblin.health -= goblin.isBoss ? bullet.damage : bullet.damage;
+        if (goblin.isBig || goblin.isBoss) {
+          createHitMarker(goblin.x, goblin.y - goblin.size * 0.9, `-${bullet.damage}`, "#ff6dff", 14);
+        }
 
         if (goblin.health <= 0) {
           miniGameState.goblins.splice(goblinIndex, 1);
           createGoblinDeath(goblin.x, goblin.y, goblin.size);
 
           if (goblin.isBoss) {
-            endMiniGameWithVictory();
+            endMiniGameWithVictory(goblin.x, goblin.y);
           }
         } else {
           createGoblinHitSpark(goblin.x, goblin.y, goblin.size);
@@ -1564,6 +1955,9 @@ function collectUpgradeApple() {
   if (miniGameState.applesTowardNextLevel >= MINI_GAME_LEVEL_REQUIREMENTS[miniGameState.level]) {
     miniGameState.level += 1;
     miniGameState.applesTowardNextLevel = 0;
+    if (miniGameState.level >= 5) {
+      miniGameState.apples = miniGameState.apples.filter((apple) => apple.type === "golden");
+    }
     createLevelPulse(miniGameState.level >= 5);
     createLevelUpMessage();
     createFairyBombDrop();
@@ -1670,38 +2064,29 @@ function triggerGoldenAppleBlast(x, y) {
 function checkGoblinContact() {
   const turret = getTurretPosition();
   const hitRadius = 30;
-  const touched = miniGameState.goblins.some(
+  const touchedGoblin = miniGameState.goblins.find(
     (goblin) => Math.hypot(goblin.x - turret.x, goblin.y - turret.y) <= goblin.size + hitRadius
   );
 
-  if (touched) {
-    failMiniGame();
+  if (touchedGoblin) {
+    failMiniGame(touchedGoblin.x, touchedGoblin.y);
   }
 }
 
-function failMiniGame() {
+function failMiniGame(x, y) {
   if (miniGameState.status !== "playing") {
     return;
   }
 
-  miniGameState.status = "failed";
-  miniGameState.bullets = [];
-  window.setTimeout(() => {
-    if (miniGameState.status === "failed") {
-      startMiniGame();
-    }
-  }, MINI_GAME_FAIL_RESTART_MS);
+  startMiniGameFinish("failed", x, y);
 }
 
-function endMiniGameWithVictory() {
+function endMiniGameWithVictory(x, y) {
   if (miniGameState.status !== "playing") {
     return;
   }
 
-  miniGameState.status = "victory";
-  miniGameState.bullets = [];
-  miniGameState.goblins = [];
-  miniGameState.apples = [];
+  startMiniGameFinish("victory", x, y);
 }
 
 function createGoblinDeath(x, y, size) {
@@ -1734,6 +2119,14 @@ function trimMiniGameObjects() {
   );
   miniGameState.trails = miniGameState.trails.filter((trail) => now - trail.startedAt < trail.duration);
   miniGameState.levelMessages = miniGameState.levelMessages.filter((message) => now - message.startedAt < 1100);
+  miniGameState.hitMarkers = miniGameState.hitMarkers.filter((marker) => now - marker.startedAt < 650);
+  miniGameState.appleSplatters = miniGameState.appleSplatters.filter((splatter) => now - splatter.startedAt < 360);
+  miniGameState.frogs = miniGameState.frogs.filter(
+    (frog) => frog.state !== "giant" || now - frog.hitAt < 8600
+  );
+  miniGameState.scorchMarks = miniGameState.scorchMarks.filter(
+    (mark) => !mark.createdAt || now - mark.createdAt < 620
+  );
   miniGameState.goblins = miniGameState.goblins.filter((goblin) => goblin.y < height + 40);
   miniGameState.explosions = miniGameState.explosions.filter(
     (explosion) => now - explosion.startedAt < (explosion.type === "golden" ? 720 : MINI_GAME_DEATH_ANIMATION_MS)
@@ -1753,18 +2146,23 @@ function drawMiniGame() {
   context.save();
   context.globalAlpha = gameplayOpacity;
   applyScreenShake(context);
+  drawLake(context);
   drawLevelPulses(context);
   drawTrails(context);
   drawScorchMarks(context);
   drawForestObstacles(context);
   drawApples(context);
+  drawAppleSplatters(context);
+  drawFrogs(context);
   drawFairyBombs(context);
   drawShells(context);
   drawBullets(context);
   drawGoblins(context);
   drawExplosions(context);
+  drawHitMarkers(context);
   drawTurret(context);
   context.restore();
+  drawMiniGameFinishEffect(context);
   drawMiniGameHud(context);
   drawLevelMessages(context);
 }
@@ -1780,6 +2178,14 @@ function getMiniGameGameplayOpacity() {
 function applyScreenShake(context) {
   const now = performance.now();
 
+  if (miniGameState.status === "finishing" && miniGameState.finishEffect) {
+    const age = now - miniGameState.finishEffect.startedAt;
+    const fade = Math.max(0, 1 - age / MINI_GAME_FINISH_EFFECT_MS);
+    const strength = miniGameState.shakeIntensity * fade;
+    context.translate(Math.sin(age / 78) * strength, Math.cos(age / 112) * strength * 0.7);
+    return;
+  }
+
   if (now >= miniGameState.shakeUntil) {
     miniGameState.shakeIntensity = 0;
     return;
@@ -1788,6 +2194,39 @@ function applyScreenShake(context) {
   const remaining = (miniGameState.shakeUntil - now) / 620;
   const strength = miniGameState.shakeIntensity * Math.max(0.18, remaining);
   context.translate((Math.random() - 0.5) * strength, (Math.random() - 0.5) * strength);
+}
+
+function drawMiniGameFinishEffect(context) {
+  const effect = miniGameState.finishEffect;
+
+  if (!effect || miniGameState.status !== "finishing") {
+    return;
+  }
+
+  const age = performance.now() - effect.startedAt;
+  const progress = Math.min(age / MINI_GAME_FINISH_EFFECT_MS, 1);
+  const flashOpacity = Math.max(0, 1 - age / 1450);
+  const bloomOpacity = Math.max(0, 1 - progress);
+  const originX = Math.max(0, Math.min(window.innerWidth, effect.x));
+  const originY = Math.max(0, Math.min(window.innerHeight, effect.y));
+  const pulseRadius = 18 + progress * Math.max(window.innerWidth, window.innerHeight) * 1.65;
+
+  context.save();
+  context.globalCompositeOperation = "lighter";
+
+  const burst = context.createRadialGradient(originX, originY, 0, originX, originY, pulseRadius);
+  burst.addColorStop(0, `rgba(255, 255, 255, ${1 * bloomOpacity})`);
+  burst.addColorStop(0.18, `rgba(255, 255, 255, ${0.66 * bloomOpacity})`);
+  burst.addColorStop(0.52, `rgba(255, 255, 255, ${0.18 * bloomOpacity})`);
+  burst.addColorStop(1, "rgba(255, 255, 255, 0)");
+  context.fillStyle = burst;
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+  context.globalCompositeOperation = "source-over";
+  context.globalAlpha = flashOpacity * 0.94;
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  context.restore();
 }
 
 function drawMiniGameHud(context) {
@@ -1898,6 +2337,40 @@ function drawAppleRequirementIcon(context, x, y, isFilled, isGolden) {
   context.restore();
 }
 
+function drawHitMarkers(context) {
+  const now = performance.now();
+
+  miniGameState.hitMarkers.forEach((marker) => {
+    const progress = Math.min((now - marker.startedAt) / 650, 1);
+    const opacity = progress < 0.18 ? progress / 0.18 : Math.max(0, 1 - (progress - 0.55) / 0.45);
+    const wobble = Math.sin(progress * Math.PI * 8) * 3;
+
+    context.save();
+    context.globalAlpha = opacity;
+    context.translate(marker.x + wobble, marker.y - progress * 24);
+    context.font = `bold ${marker.size}px 'Courier New', monospace`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = marker.color;
+    context.shadowColor = marker.color;
+    context.shadowBlur = 12;
+    context.fillText(marker.text, 0, 0);
+    context.strokeStyle = "rgba(255, 255, 255, 0.82)";
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(-10, -10);
+    context.lineTo(-3, -3);
+    context.moveTo(10, -10);
+    context.lineTo(3, -3);
+    context.moveTo(-10, 10);
+    context.lineTo(-3, 3);
+    context.moveTo(10, 10);
+    context.lineTo(3, 3);
+    context.stroke();
+    context.restore();
+  });
+}
+
 function drawLevelMessages(context) {
   const now = performance.now();
 
@@ -1936,18 +2409,109 @@ function drawLevelPulses(context) {
   });
 }
 
-function drawScorchMarks(context) {
-  miniGameState.scorchMarks.forEach((mark) => {
-    context.save();
-    context.translate(mark.x, mark.y);
-    context.fillStyle = "rgba(58, 36, 10, 0.72)";
-    context.shadowColor = "rgba(255, 190, 58, 0.18)";
-    context.shadowBlur = 12;
+function drawLake(context) {
+  const lake = miniGameState.lake;
+
+  if (!lake) {
+    return;
+  }
+
+  context.save();
+  context.translate(lake.x, lake.y);
+  context.shadowColor = "rgba(96, 207, 255, 0.42)";
+  context.shadowBlur = 12;
+  context.fillStyle = "rgba(28, 120, 255, 0.42)";
+  [
+    [0, 0, 1, 1],
+    [-lake.radiusX * 0.42, lake.radiusY * 0.06, 0.68, 0.76],
+    [lake.radiusX * 0.36, -lake.radiusY * 0.08, 0.72, 0.8],
+    [lake.radiusX * 0.12, lake.radiusY * 0.42, 0.62, 0.5],
+  ].forEach(([x, y, widthScale, heightScale]) => {
     context.beginPath();
-    context.ellipse(0, 0, mark.radius * 1.15, mark.radius * 0.72, 0, 0, Math.PI * 2);
+    context.ellipse(x, y, lake.radiusX * widthScale, lake.radiusY * heightScale, -0.12, 0, Math.PI * 2);
     context.fill();
-    context.fillStyle = "rgba(0, 0, 0, 0.5)";
-    context.fillRect(-mark.radius * 0.42, -2, mark.radius * 0.84, 4);
+  });
+  drawLilyPad(context, lake.radiusX * 0.26, -lake.radiusY * 0.08, 13);
+  drawLilyPad(context, -lake.radiusX * 0.32, lake.radiusY * 0.2, 10);
+  drawLilyPad(context, lake.radiusX * 0.02, lake.radiusY * 0.34, 8);
+  context.restore();
+}
+
+function drawLilyPad(context, x, y, radius) {
+  context.save();
+  context.translate(x, y);
+  context.fillStyle = "rgba(87, 214, 93, 0.82)";
+  context.strokeStyle = "rgba(156, 255, 156, 0.7)";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(0, 0);
+  context.arc(0, 0, radius, 0.22, Math.PI * 1.84);
+  context.closePath();
+  context.fill();
+  context.stroke();
+  context.restore();
+}
+
+function drawScorchMarks(context) {
+  const now = performance.now();
+
+  miniGameState.scorchMarks.forEach((mark) => {
+    const progress = mark.createdAt ? Math.min((now - mark.createdAt) / 620, 1) : 0;
+    const opacity = mark.createdAt ? 1 - progress : 1;
+
+    context.save();
+    context.globalAlpha = opacity;
+    context.translate(mark.x, mark.y);
+
+    if (mark.type === "dust") {
+      context.fillStyle = "rgba(255, 255, 255, 0.82)";
+      context.shadowColor = "rgba(255, 255, 255, 0.35)";
+      context.shadowBlur = 10;
+    }
+
+    if (mark.type === "dust") {
+      for (let index = 0; index < 7; index += 1) {
+        const angle = -Math.PI + (Math.PI * index) / 6;
+        const distance = mark.radius * (0.35 + progress * 1.15);
+        const size = Math.max(2, 5 - progress * 3);
+        context.fillRect(Math.cos(angle) * distance - size / 2, Math.sin(angle) * distance * 0.34 - size / 2, size, size);
+      }
+    } else {
+      context.fillStyle = "rgba(58, 36, 10, 0.72)";
+      context.shadowColor = "rgba(255, 190, 58, 0.18)";
+      context.shadowBlur = 12;
+      context.beginPath();
+      context.ellipse(0, 0, mark.radius * (1.15 + progress * 0.9), mark.radius * (0.72 + progress * 0.24), 0, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = "rgba(0, 0, 0, 0.5)";
+      context.fillRect(-mark.radius * 0.42, -2, mark.radius * 0.84, 4);
+    }
+    context.restore();
+  });
+}
+
+function drawAppleSplatters(context) {
+  const now = performance.now();
+
+  miniGameState.appleSplatters.forEach((splatter) => {
+    const progress = Math.min((now - splatter.startedAt) / 360, 1);
+    const opacity = 1 - progress;
+
+    context.save();
+    context.globalAlpha = opacity;
+    context.translate(splatter.x, splatter.y);
+    context.fillStyle = splatter.color;
+    context.shadowColor = splatter.color;
+    context.shadowBlur = 8;
+    splatter.drops.forEach((drop) => {
+      const distance = drop.speed * progress;
+      context.fillRect(
+        Math.cos(drop.angle) * distance - drop.size / 2,
+        Math.sin(drop.angle) * distance - drop.size / 2,
+        drop.size,
+        drop.size
+      );
+    });
     context.restore();
   });
 }
@@ -1982,6 +2546,251 @@ function drawTrails(context) {
     context.fill();
     context.restore();
   });
+}
+
+function drawFrogs(context) {
+  miniGameState.frogs.forEach((frog) => {
+    const age = frog.state === "giant" ? performance.now() - frog.hitAt : 0;
+    const grow = frog.state === "giant" ? Math.min(age / 520, 1) : 0;
+    const shrink = frog.state === "giant" && age > 7900 ? Math.max(0, 1 - (age - 7900) / 700) : 1;
+    const scale = (1 + grow * 2.8) * shrink;
+    const hop = Math.sin(frog.phase) * (frog.state === "waiting" ? 3 : 1);
+    const isGrowing = frog.state === "giant" && age < 620;
+    const isRampaging = frog.state === "giant" && age >= 620 && age < 6200;
+    const isBurping = frog.state === "giant" && age >= 6200 && age < 7900;
+    const isTired = frog.state === "giant" && age >= 7000;
+    const mouthOpen = isRampaging || isBurping;
+    const eyes420 = isBurping;
+    const purpleMix = getFrogPurpleFlicker(age, isRampaging);
+
+    context.save();
+    context.translate(frog.x, frog.y + hop);
+    context.scale(scale, scale);
+    context.globalAlpha = shrink;
+    context.shadowColor = purpleMix > 0 ? `rgba(177, 92, 255, ${0.45 + 0.45 * purpleMix})` : "rgba(255, 109, 255, 0.42)";
+    context.shadowBlur = frog.state === "giant" ? 18 + purpleMix * 18 : 10;
+
+    if (frog.state === "giant") {
+      if (isGrowing || isBurping || isTired) {
+        drawFrontFrog(context, frog, { isGrowing, isBurping, isTired, eyes420, age, purpleMix });
+      } else {
+        drawSideFrog(context, frog, { isRampaging, mouthOpen, age, purpleMix });
+      }
+      context.restore();
+      return;
+    }
+
+    context.fillStyle = "#57d65d";
+    context.fillRect(-10, -5, 20, 12);
+    context.fillRect(-15, 2, 7, 5);
+    context.fillRect(8, 2, 7, 5);
+    context.fillStyle = "#ffffff";
+    context.fillRect(-8, -10, 6, 6);
+    context.fillRect(2, -10, 6, 6);
+    if (isRampaging) {
+      context.strokeStyle = "#102b14";
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.moveTo(-9, -13);
+      context.lineTo(-2, -9);
+      context.moveTo(9, -13);
+      context.lineTo(2, -9);
+      context.stroke();
+    }
+    context.fillStyle = eyes420 ? "#ff6dff" : "#000000";
+    context.font = eyes420 ? "bold 4px 'Courier New', monospace" : "4px 'Courier New', monospace";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    if (eyes420) {
+      context.fillText("420", -5, -7);
+      context.fillText("420", 5, -7);
+      context.strokeStyle = "rgba(255, 255, 255, 0.86)";
+      context.beginPath();
+      context.moveTo(-12, -13);
+      context.lineTo(-7, -16);
+      context.moveTo(8, -16);
+      context.lineTo(13, -13);
+      context.stroke();
+    } else {
+      context.fillRect(-6, -8, 2, 2);
+      context.fillRect(4, -8, 2, 2);
+    }
+    context.fillStyle = "#000000";
+    context.fillRect(-4, 4, 8, mouthOpen ? 7 : 2);
+    if (mouthOpen) {
+      context.fillStyle = "#000000";
+      context.fillRect(-7, 4, 14, 7);
+    }
+    if (isBurping) {
+      drawFrogBubbles(context, frog.bubbles, age - 6200);
+    }
+    if (isTired) {
+      context.strokeStyle = "rgba(255, 255, 255, 0.72)";
+      context.beginPath();
+      context.moveTo(-7, -8);
+      context.lineTo(-3, -8);
+      context.moveTo(3, -8);
+      context.lineTo(7, -8);
+      context.stroke();
+    }
+    context.restore();
+  });
+}
+
+function drawFrogBubbles(context, bubbles, age) {
+  bubbles.forEach((bubble) => {
+    const bubbleAge = Math.max(0, age - bubble.delay);
+    const progress = Math.min(bubbleAge / 1900, 1);
+
+    if (bubbleAge <= 0 || progress >= 1) {
+      return;
+    }
+
+    const opacity = Math.max(0, 0.58 - progress * 0.5);
+    const wobble = Math.sin(progress * Math.PI * 2 + bubble.delay) * 1.6;
+
+    context.save();
+    context.strokeStyle = `rgba(214, 190, 255, ${opacity})`;
+    context.fillStyle = `rgba(255, 255, 255, ${opacity * 0.12})`;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.arc(
+      bubble.x + bubble.vx * progress * 0.12 + wobble,
+      bubble.y + bubble.vy * progress * 0.12 - progress * 4,
+      bubble.size + progress * 1.8,
+      0,
+      Math.PI * 2
+    );
+    context.fill();
+    context.stroke();
+    context.restore();
+  });
+}
+
+function drawFrontFrog(context, frog, mood) {
+  const angry = mood.isGrowing;
+  const tired = mood.isTired;
+  const eyes420 = mood.isBurping && Math.floor(mood.age / 120) % 2 === 0;
+  const frogColor = blendHexColors(tired ? "#78d86f" : "#57d65d", "#b15cff", mood.purpleMix || 0);
+
+  context.fillStyle = frogColor;
+  context.fillRect(-12, -7, 24, 15);
+  context.fillRect(-17, 1, 8, 6);
+  context.fillRect(9, 1, 8, 6);
+  context.fillStyle = "#ffffff";
+  context.fillRect(-8, -12, 6, 6);
+  context.fillRect(2, -12, 6, 6);
+  context.fillStyle = eyes420 ? "#ff6dff" : "#000000";
+  context.font = eyes420 ? "bold 4px 'Courier New', monospace" : "4px 'Courier New', monospace";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+
+  if (eyes420) {
+    context.fillText("420", -5, -9);
+    context.fillText("420", 5, -9);
+  } else if (tired) {
+    context.fillRect(-8, -9, 5, 1);
+    context.fillRect(3, -9, 5, 1);
+  } else {
+    context.fillRect(-6, -10, 2, 2);
+    context.fillRect(4, -10, 2, 2);
+  }
+
+  if (angry) {
+    context.strokeStyle = "#102b14";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(-10, -15);
+    context.lineTo(-2, -11);
+    context.moveTo(10, -15);
+    context.lineTo(2, -11);
+    context.stroke();
+  }
+
+  context.fillStyle = "#000000";
+  context.fillRect(tired ? -4 : -6, 3, tired ? 8 : 12, mood.isBurping ? 6 : 2);
+
+  if (mood.isBurping) {
+    drawFrogBubbles(context, frog.bubbles, mood.age - 6200);
+  }
+}
+
+function drawSideFrog(context, frog, mood) {
+  const direction = frog.direction || 1;
+  const frogColor = blendHexColors("#57d65d", "#b15cff", mood.purpleMix || 0);
+
+  context.save();
+  context.scale(direction, 1);
+  context.fillStyle = frogColor;
+  context.fillRect(-13, -6, 24, 14);
+  context.fillRect(4, -11, 13, 11);
+  context.fillRect(-16, 3, 11, 6);
+  context.fillRect(3, 8, 15, 5);
+  context.fillStyle = "#ffffff";
+  context.fillRect(8, -15, 6, 6);
+  context.fillStyle = mood.eyes420 ? "#ff6dff" : "#000000";
+  context.font = mood.eyes420 ? "bold 4px 'Courier New', monospace" : "4px 'Courier New', monospace";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  if (mood.eyes420) {
+    context.fillText("420", 11, -12);
+  } else if (mood.isTired) {
+    context.fillRect(9, -12, 5, 1);
+  } else {
+    context.fillRect(11, -13, 2, 2);
+  }
+  if (mood.isRampaging) {
+    context.strokeStyle = "#102b14";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(5, -16);
+    context.lineTo(14, -13);
+    context.stroke();
+  }
+  if (mood.mouthOpen) {
+    context.fillStyle = frogColor;
+    context.fillRect(14, -8, 13, 5);
+    context.fillRect(23, -3, 5, 4);
+    context.fillRect(14, 5, 13, 5);
+    context.fillRect(23, 1, 5, 4);
+    context.fillStyle = "#000000";
+    context.fillRect(16, -3, 10, 8);
+    context.fillStyle = "#ff1e1e";
+    context.fillRect(18, 2, 5, 3);
+  } else {
+    context.fillStyle = "#000000";
+    context.fillRect(15, -2, 6, 2);
+  }
+  context.restore();
+}
+
+function getFrogPurpleFlicker(age, isRampaging) {
+  if (!isRampaging) {
+    return 0;
+  }
+
+  const flickerWindows = [
+    [1600, 2600],
+    [4100, 5100],
+  ];
+  const isInsideWindow = flickerWindows.some(([start, end]) => age >= start && age <= end);
+
+  if (!isInsideWindow) {
+    return 0;
+  }
+
+  return Math.sin(age / 58) > 0 ? 0.82 : 0.18;
+}
+
+function blendHexColors(from, to, amount) {
+  const clamped = Math.max(0, Math.min(amount, 1));
+  const fromValue = Number.parseInt(from.slice(1), 16);
+  const toValue = Number.parseInt(to.slice(1), 16);
+  const fromRgb = [(fromValue >> 16) & 255, (fromValue >> 8) & 255, fromValue & 255];
+  const toRgb = [(toValue >> 16) & 255, (toValue >> 8) & 255, toValue & 255];
+  const mixed = fromRgb.map((value, index) => Math.round(value + (toRgb[index] - value) * clamped));
+
+  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
 }
 
 function drawApples(context) {
@@ -2051,6 +2860,10 @@ function drawFairyBombs(context) {
 
 function drawForestObstacles(context) {
   miniGameState.obstacles.forEach((obstacle) => {
+    if (obstacle.isDestroyed) {
+      return;
+    }
+
     if (obstacle.type === "tree") {
       drawPixelTree(context, obstacle);
       return;
@@ -2082,7 +2895,26 @@ function drawPixelTree(context, obstacle) {
   context.strokeStyle = "rgba(156, 255, 156, 0.75)";
   context.lineWidth = 1;
   context.strokeRect(-unit * 2.3, -unit * 2.5, unit * 4.6, unit * 1.3);
+  drawObstacleHealthBar(context, obstacle, unit, -unit * 5.3);
   context.restore();
+}
+
+function drawObstacleHealthBar(context, obstacle, unit, yOffset) {
+  if (obstacle.isKnocked || obstacle.isDestroyed || obstacle.maxHealth <= 1) {
+    return;
+  }
+
+  const width = unit * 5.2;
+  const height = 3;
+  const healthRatio = Math.max(0, (obstacle.health ?? obstacle.maxHealth) / obstacle.maxHealth);
+
+  context.fillStyle = "rgba(0, 0, 0, 0.7)";
+  context.fillRect(-width / 2, yOffset, width, height);
+  context.fillStyle = "#9cff9c";
+  context.fillRect(-width / 2, yOffset, width * healthRatio, height);
+  context.strokeStyle = "rgba(255, 255, 255, 0.55)";
+  context.lineWidth = 1;
+  context.strokeRect(-width / 2, yOffset, width, height);
 }
 
 function drawPixelMushroom(context, obstacle) {
@@ -2104,6 +2936,7 @@ function drawPixelMushroom(context, obstacle) {
   context.strokeStyle = "rgba(156, 255, 156, 0.78)";
   context.lineWidth = 1;
   context.strokeRect(-unit * 3, -unit * 2.2, unit * 6, unit * 1.3);
+  drawObstacleHealthBar(context, obstacle, unit, -unit * 3.8);
   context.restore();
 }
 
@@ -2501,7 +3334,6 @@ function bootstrap() {
     loadingMessages: LOADING_MESSAGES,
     sceneManager,
     getOrientation,
-    requestFullscreenLandscape,
     scenes: SCENE_NAMES,
   };
 }
