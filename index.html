@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>The Lost Relic</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main id="app" class="app" aria-label="The Lost Relic">
+      <section class="scene loading-scene" data-scene="Loading" aria-labelledby="loading-title">
+        <div id="rotate-phone-message" class="rotate-phone-message" hidden>
+          <p>
+            Loading<span class="animated-ellipsis" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+          </p>
+          <p>Rotate your phone</p>
+        </div>
+
+        <div id="wizard-question" class="wizard-question" hidden>
+          <p id="wizard-question-text">
+            Have you ever, in this life or a past life, interacted with what we know to be
+            <span>'The Retro Wizard'?</span>
+          </p>
+          <div class="wizard-question__choices" aria-labelledby="wizard-question-text">
+            <button type="button" data-wizard-answer="yes">yes</button>
+            <button type="button" data-wizard-answer="no">no</button>
+          </div>
+          <p id="wizard-question-result" class="wizard-question__result" hidden>good luck</p>
+        </div>
+
+        <div class="terminal-panel" aria-live="polite" hidden>
+          <p id="loading-title" class="terminal-kicker">THE LOST RELIC</p>
+          <div id="loading-output" class="terminal-output"></div>
+        </div>
+
+        <p id="transmission-message" class="transmission-message" hidden>TRANSMISSION INCOMING</p>
+
+        <img
+          id="wizard-hologram"
+          class="wizard-hologram"
+          src="assets/Angry_WIZ_Pointing.png"
+          alt="The Retro Wizard"
+          hidden
+        />
+
+        <div id="wizard-speech" class="wizard-speech" hidden>
+          <span id="wizard-speech-text"></span><span class="loading-cursor" aria-hidden="true"></span>
+        </div>
+
+        <div id="mini-game-intro" class="mini-game-intro" hidden>
+          <div class="mini-game-intro__wormhole" aria-hidden="true"></div>
+          <div class="fantasy-floater fantasy-floater--fairy" aria-hidden="true"></div>
+          <div class="fantasy-floater fantasy-floater--tree" aria-hidden="true"></div>
+          <div class="fantasy-floater fantasy-floater--mushroom" aria-hidden="true"></div>
+          <div class="fantasy-floater fantasy-floater--frog" aria-hidden="true"></div>
+          <div class="fantasy-floater fantasy-floater--hat" aria-hidden="true"></div>
+          <div class="fantasy-floater fantasy-floater--leaf-charm" aria-hidden="true"></div>
+          <div class="fantasy-floater fantasy-floater--smoke-stick" aria-hidden="true"></div>
+          <div class="arcade-logo" aria-label="Ganja Goblins">
+            <span class="arcade-logo__line">Ganja</span>
+            <span class="arcade-logo__leaf" aria-hidden="true"></span>
+            <span class="arcade-logo__line arcade-logo__line--bottom">Goblins</span>
+          </div>
+          <p class="mini-game-intro__prompt">Press anywhere to begin</p>
+        </div>
+
+        <canvas
+          id="mini-game-canvas"
+          class="mini-game-canvas"
+          aria-label="Ganj Goblins shooting game"
+          hidden
+        ></canvas>
+      </section>
+
+      <section class="scene" data-scene="RotatePhone" aria-labelledby="rotate-phone-title">
+        <h1 id="rotate-phone-title">Rotate Phone</h1>
+      </section>
+
+      <section class="scene" data-scene="WizardIntro" aria-labelledby="wizard-intro-title">
+        <h1 id="wizard-intro-title">Wizard Intro</h1>
+      </section>
+
+      <section class="scene" data-scene="MiniGame" aria-labelledby="mini-game-title">
+        <h1 id="mini-game-title">Mini Game</h1>
+      </section>
+
+      <section class="scene" data-scene="Unlock" aria-labelledby="unlock-title">
+        <h1 id="unlock-title">Unlock</h1>
+      </section>
+
+      <section class="scene" data-scene="MusicReveal" aria-labelledby="music-reveal-title">
+        <h1 id="music-reveal-title">Music Reveal</h1>
+      </section>
+    </main>
+
+    <script src="script.js" defer></script>
+  </body>
+</html>
