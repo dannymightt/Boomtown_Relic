@@ -25,14 +25,44 @@ const SIGNAL_FLUCTUATE_MS = 2000;
 const SIGNAL_LOCK_DELAY_MS = 1000;
 const TRANSMISSION_BLINK_COUNT = 3;
 const TRANSMISSION_BLINK_INTERVAL_MS = 1000;
+const OPENING_WIZARD_RUN_MS = 2650;
+const OPENING_WIZARD_IDLE_BEFORE_DIALOGUE_MS = 0;
+const OPENING_WIZARD_DIALOGUE_PAUSE_MS = 1350;
+const OPENING_MOUNTAIN_EXPLOSION_MS = 1200;
+const OPENING_TAP_BUBBLE_DELAY_MS = 420;
+const OPENING_TAP_BUBBLE_INTERVAL_MS = 900;
+const OPENING_TAP_BUBBLE_MIN_INTERVAL_MS = 430;
+const OPENING_TAP_BUBBLE_WINDOW_MS = 1800;
+const OPENING_TAP_TUTORIAL_READY_MS = 1320;
+const OPENING_TAP_SUCCESS_START_MS = 860;
+const OPENING_TRAVEL_HUD_AFTER_TUTORIAL_MS = 900;
+const OPENING_TRAVEL_HUD_COMPLETE_MS = 22000;
+const OPENING_GAME_START_FADE_MS = 800;
+const OPENING_PATH_FAIL_RESTART_MS = 2800;
+const OPENING_RECURRING_EXPLOSION_MIN_MS = 10000;
+const OPENING_RECURRING_EXPLOSION_MAX_MS = 15000;
 const WIZARD_HOLOGRAM_DELAY_MS = 450;
 const WIZARD_HOLOGRAM_ARRIVAL_MS = 1150;
 const WIZARD_SPEECH_TYPE_SPEED_MS = 85;
+const OPENING_WIZARD_DIALOGUE_TYPE_SPEED_MS = 26;
 const WIZARD_SPEECH_PAUSE_MS = 1100;
 const WIZARD_EXIT_DELAY_MS = 1000;
 const WIZARD_EXIT_FADE_MS = 800;
 const WIZARD_SPEECH_TEXT = "oi mate";
 const WIZARD_SECOND_SPEECH_TEXT = "Shoot these fucking things will ya..";
+const OPENING_WIZARD_FIRST_DIALOGUE =
+  "hello lad im the retro wizard, a gang of goblins stole my stash and i need your help getting to boomtown to retrieve it";
+const OPENING_WIZARD_SECOND_DIALOGUE =
+  "as you can see lad things are heating up quite quick, we best get going its just up ahead";
+const OPENING_WIZARD_TRAVEL_DIALOGUE = [
+  "this is the fifth time these goblins have taken my shit this week im gonna kill em",
+  "oh and also there's a few challenges you gotta do to get me to boom quicker cheers, first ones coming up now",
+];
+const OPENING_WIZARD_RESTART_DIALOGUE = [
+  "failed? ah its ok mate we all mistakes, even if it was absolutely stupid",
+  "im high almost all the time and not even i fuck that up but ok",
+  "are you fucking serious",
+];
 const TYPING_SOUND_URL = "assets/code-typing-soundfx.wav";
 const RETRO_FX_SOUND_URL = "assets/retro-fx-2.mp3";
 const RETRO_FX_SPRITES = {
@@ -83,7 +113,14 @@ const MINI_GAME_TIKI_START_MS = 40000;
 const MINI_GAME_TIKI_SPAWN_MS = 1500;
 const MINI_GAME_INTRO_FADE_MS = 700;
 const MINI_GAME_INSTRUCTION_SEQUENCE_MS = 11800;
-const TEST_START_AT_MINI_GAME_INTRO = true;
+const MINI_GAME_WIZARD_TIP_TEXT =
+  "alright g, you got this all you gotta do is shoot the apples to upgrade your mushrooms and kill the goblins, i believe in you";
+const MINI_GAME_WIZARD_TIP_DELAY_MS = 650;
+const MINI_GAME_WIZARD_TIP_TYPE_SPEED_MS = 17;
+const MINI_GAME_WIZARD_TIP_HOLD_MS = 1450;
+const MINI_GAME_WIZARD_TIP_EXIT_MS = 760;
+const TEST_START_AT_TRANSMISSION = true;
+const TEST_START_AT_MINI_GAME_INTRO = false;
 
 // Edit this array to change the opening terminal sequence.
 const LOADING_MESSAGES = [
@@ -97,12 +134,81 @@ const LOADING_MESSAGES = [
   { text: "THE RETRO WIZARD", tone: "final" },
 ];
 
+const OPENING_FOREST_PROPS = [
+  { type: "tree", x: 5, y: -6, size: 42, scale: 2.4, z: 4, alpha: 1 },
+  { type: "tree", x: 94, y: -5, size: 44, scale: 2.5, z: 4, alpha: 1 },
+  { type: "rock", x: 13, y: 3, size: 28, scale: 1.8, z: 5, alpha: 0.95 },
+  { type: "rock", x: 84, y: 4, size: 25, scale: 1.7, z: 5, alpha: 0.95 },
+  { type: "mushroom", x: 18, y: 2, size: 22, scale: 1.4, z: 5, alpha: 0.95 },
+  { type: "mushroom", x: 79, y: 2, size: 20, scale: 1.25, z: 5, alpha: 0.95 },
+  { type: "tree", x: 22, y: 10, size: 30, scale: 1.45, z: 3, alpha: 0.92 },
+  { type: "tree", x: 76, y: 11, size: 30, scale: 1.42, z: 3, alpha: 0.92 },
+  { type: "rock", x: 28, y: 13, size: 16, scale: 1.05, z: 3, alpha: 0.85 },
+  { type: "rock", x: 70, y: 14, size: 16, scale: 1, z: 3, alpha: 0.85 },
+  { type: "tree", x: 34, y: 24, size: 20, scale: 0.9, z: 2, alpha: 0.76 },
+  { type: "tree", x: 66, y: 24, size: 20, scale: 0.9, z: 2, alpha: 0.76 },
+  { type: "tree", x: 41, y: 34, size: 13, scale: 0.7, z: 1, alpha: 0.62 },
+  { type: "tree", x: 59, y: 34, size: 13, scale: 0.7, z: 1, alpha: 0.62 },
+];
+
+const OPENING_FOREST_RUN_PROPS = [
+  { type: "tree", startX: 43.8, endShift: -152, startY: 33, endDrop: 168, size: 12, endScale: 6.75, delay: 0, duration: 9.2 },
+  { type: "tree", startX: 56.2, endShift: 152, startY: 33, endDrop: 168, size: 12, endScale: 6.7, delay: 0.9, duration: 9.25 },
+  { type: "rock", startX: 45.6, endShift: -108, startY: 35, endDrop: 154, size: 8, endScale: 4.1, delay: 1.7, duration: 8.75 },
+  { type: "tree", startX: 42.2, endShift: -178, startY: 32, endDrop: 176, size: 12, endScale: 7.2, delay: 2.45, duration: 9.55 },
+  { type: "mushroom", startX: 54.8, endShift: 96, startY: 36, endDrop: 148, size: 7, endScale: 3.7, delay: 3.25, duration: 8.85 },
+  { type: "tree", startX: 57.8, endShift: 178, startY: 32, endDrop: 176, size: 12, endScale: 7.25, delay: 4.05, duration: 9.6 },
+  { type: "tree", startX: 45.1, endShift: -126, startY: 34, endDrop: 160, size: 11, endScale: 5.95, delay: 4.9, duration: 9.05 },
+  { type: "rock", startX: 55.6, endShift: 118, startY: 35, endDrop: 156, size: 8, endScale: 4.25, delay: 5.7, duration: 8.8 },
+  { type: "tree", startX: 41.4, endShift: -198, startY: 32, endDrop: 182, size: 12, endScale: 7.45, delay: 6.55, duration: 9.8 },
+  { type: "mushroom", startX: 44.4, endShift: -112, startY: 36, endDrop: 150, size: 7, endScale: 3.85, delay: 7.35, duration: 8.95 },
+  { type: "tree", startX: 54.4, endShift: 132, startY: 34, endDrop: 162, size: 11, endScale: 6.05, delay: 8.2, duration: 9.1 },
+  { type: "tree", startX: 58.7, endShift: 202, startY: 32, endDrop: 184, size: 12, endScale: 7.6, delay: 9.05, duration: 9.9 },
+];
+
+const OPENING_SKY_STARS = [
+  [5, 10, 0.7], [9, 26, 0.45], [13, 17, 0.55], [17, 7, 0.4], [20, 31, 0.5],
+  [24, 20, 0.65], [28, 11, 0.45], [31, 30, 0.55], [35, 15, 0.5], [39, 6, 0.42],
+  [43, 25, 0.58], [47, 12, 0.5], [51, 19, 0.62], [55, 7, 0.45], [59, 29, 0.54],
+  [63, 15, 0.48], [67, 23, 0.6], [71, 8, 0.44], [75, 31, 0.5], [79, 17, 0.58],
+  [83, 11, 0.46], [88, 26, 0.52], [92, 15, 0.4], [96, 30, 0.56], [11, 38, 0.38],
+  [22, 42, 0.44], [33, 36, 0.36], [72, 39, 0.42], [86, 40, 0.34], [3, 34, 0.32],
+  [7, 45, 0.3], [15, 41, 0.36], [18, 52, 0.28], [26, 47, 0.34], [30, 4, 0.3],
+  [37, 44, 0.32], [42, 37, 0.34], [49, 43, 0.28], [53, 34, 0.35], [57, 47, 0.31],
+  [62, 41, 0.33], [68, 4, 0.28], [73, 46, 0.34], [78, 5, 0.3], [82, 35, 0.33],
+  [90, 43, 0.3], [95, 6, 0.35], [98, 21, 0.28],
+];
+
+const OPENING_CONSTELLATION_PATHS = [
+  "M3 24 L3 6 L8 6 L11 9 L8 12 L3 12 M8 12 L12 16 L9 24 L3 24",
+  "M16 8 L21 6 L26 8 L28 15 L26 22 L21 24 L16 22 L14 15 Z",
+  "M32 8 L37 6 L42 8 L44 15 L42 22 L37 24 L32 22 L30 15 Z",
+  "M47 24 L47 6 L52 17 L57 6 L57 24",
+  "M61 6 L67 6 M64 6 L64 24",
+  "M71 8 L76 6 L81 8 L83 15 L81 22 L76 24 L71 22 L69 15 Z",
+  "M86 6 L89 24 L93 11 L97 24 L100 6",
+  "M104 24 L104 6 L114 24 L114 6",
+];
+
 const loadingState = {
   activeSurface: null,
   isLandscape: false,
   sequenceStarted: false,
   terminalStarted: false,
   wizardSpeechStarted: false,
+  tapBubbleTimer: null,
+  tapBubbleTutorialTimer: null,
+  tapBubbleTutorialSeen: false,
+  travelHudTimer: null,
+  travelHudCompleteTimer: null,
+  travelHudStarted: false,
+  travelHudStartedAt: 0,
+  travelDialogueStarted: false,
+  travelDialogueRunId: 0,
+  pathChallengeActive: false,
+  pathChallengeFailed: false,
+  pathFailRestartCount: 0,
+  mountainExplosionTimer: null,
 };
 
 const audioState = {
@@ -167,9 +273,14 @@ const miniGameState = {
   preludeTimerGlitchSoundPlayed: false,
   preludeObstacles: [],
   gameplayFadeStartedAt: 0,
+  wizardTipStartedAt: 0,
+  wizardTipTypingActive: false,
   shakeUntil: 0,
   shakeIntensity: 0,
   finishEffect: null,
+  failedAt: 0,
+  failedButtons: null,
+  failedRetryCount: 0,
   isRunning: false,
   turretAngle: -Math.PI / 2,
   aimTarget: null,
@@ -336,7 +447,7 @@ function startTypingSound() {
     !audioState.typingBuffer ||
     audioState.isTypingSoundActive
   ) {
-    return;
+    return false;
   }
 
   const source = audioState.context.createBufferSource();
@@ -478,6 +589,11 @@ function playSoundEffect(name, options = {}) {
       playTone({ frequency: 220, endFrequency: 660, duration: 0.12, type: "triangle", volume: 0.16 });
       playTone({ frequency: 440, endFrequency: 990, duration: 0.16, type: "square", volume: 0.08, when: 0.08 });
       break;
+    case "tapPop":
+      playTone({ frequency: 740, endFrequency: 1180, duration: 0.08, type: "sine", volume: 0.06 });
+      playTone({ frequency: 1480, endFrequency: 1960, duration: 0.075, type: "triangle", volume: 0.035, when: 0.035 });
+      playNoise({ duration: 0.055, volume: 0.018, lowpass: 4200, when: 0.01 });
+      break;
     case "shoot":
       playTone({
         frequency: options.golden ? 520 : 390,
@@ -519,6 +635,13 @@ function playSoundEffect(name, options = {}) {
       playTone({ frequency: 184, endFrequency: 38, duration: 0.42, type: "sawtooth", volume: 0.18, when: 0.015 });
       playTone({ frequency: 46, endFrequency: 28, duration: 0.62, type: "triangle", volume: 0.16, when: 0.04 });
       playNoise({ duration: 0.34, volume: 0.18, lowpass: 520 });
+      break;
+    case "mountainExplosion":
+      playTone({ frequency: 46, endFrequency: 18, duration: 1.28, type: "sawtooth", volume: 0.18 });
+      playTone({ frequency: 88, endFrequency: 24, duration: 1.08, type: "triangle", volume: 0.13, when: 0.04 });
+      playTone({ frequency: 220, endFrequency: 64, duration: 0.56, type: "sawtooth", volume: 0.055, when: 0.1 });
+      playNoise({ duration: 1.18, volume: 0.15, lowpass: 420 });
+      playNoise({ duration: 0.48, volume: 0.075, lowpass: 1800, when: 0.12 });
       break;
     case "fairyFall":
       playTone({ frequency: 2200, endFrequency: 110, duration: 1.18, type: "sawtooth", volume: 0.26 });
@@ -580,6 +703,11 @@ function playSoundEffect(name, options = {}) {
     case "frogBurp":
       playTone({ frequency: 96, endFrequency: 58, duration: 0.28, type: "sawtooth", volume: 0.11 });
       playTone({ frequency: 360, endFrequency: 240, duration: 0.18, type: "sine", volume: 0.055, when: 0.1 });
+      break;
+    case "smokeGoblinFly":
+      playTone({ frequency: 520, endFrequency: 180, duration: 0.22, type: "sawtooth", volume: 0.065 });
+      playTone({ frequency: 260, endFrequency: 760, duration: 0.18, type: "triangle", volume: 0.04, when: 0.035 });
+      playNoise({ duration: 0.2, volume: 0.045, lowpass: 1600 });
       break;
     case "levelUp":
       [392, 588, 784, 1176, 1568].forEach((frequency, index) => {
@@ -725,9 +853,773 @@ function hideElement(element) {
   element.hidden = true;
 }
 
+function stopOpeningTapBubbleGame() {
+  const bubbles = document.querySelectorAll(".opening-tap-bubble");
+  const tutorial = document.querySelector("#opening-tap-tutorial");
+  const openingWizard = document.querySelector("#opening-wizard");
+
+  if (loadingState.tapBubbleTimer) {
+    window.clearTimeout(loadingState.tapBubbleTimer);
+    loadingState.tapBubbleTimer = null;
+  }
+
+  if (loadingState.tapBubbleTutorialTimer) {
+    window.clearTimeout(loadingState.tapBubbleTutorialTimer);
+    loadingState.tapBubbleTutorialTimer = null;
+  }
+
+  if (loadingState.travelHudTimer) {
+    window.clearTimeout(loadingState.travelHudTimer);
+    loadingState.travelHudTimer = null;
+  }
+
+  if (loadingState.travelHudCompleteTimer) {
+    window.clearTimeout(loadingState.travelHudCompleteTimer);
+    loadingState.travelHudCompleteTimer = null;
+  }
+
+  if (openingWizard) {
+    openingWizard.classList.remove(
+      "is-tap-tutorial-paused",
+      "is-tap-tutorial-ready",
+      "is-travel-hud-active",
+      "is-path-failed",
+      "is-path-complete",
+      "is-starting-game",
+    );
+  }
+
+  bubbles.forEach((bubble) => {
+    if (bubble.openingBubbleTimer) {
+      window.clearTimeout(bubble.openingBubbleTimer);
+      bubble.openingBubbleTimer = null;
+    }
+
+    bubble.classList.remove("is-visible", "is-left", "is-right", "is-popped", "is-tutorial-target");
+    hideElement(bubble);
+  });
+
+  if (tutorial) {
+    tutorial.classList.remove("is-visible", "is-left", "is-right", "is-ready");
+    hideElement(tutorial);
+  }
+}
+
+function hideOpeningBubbleOnly() {
+  const bubbles = document.querySelectorAll(".opening-tap-bubble");
+
+  if (loadingState.tapBubbleTimer) {
+    window.clearTimeout(loadingState.tapBubbleTimer);
+    loadingState.tapBubbleTimer = null;
+  }
+
+  if (loadingState.tapBubbleTutorialTimer) {
+    window.clearTimeout(loadingState.tapBubbleTutorialTimer);
+    loadingState.tapBubbleTutorialTimer = null;
+  }
+
+  bubbles.forEach((bubble) => {
+    if (bubble.openingBubbleTimer) {
+      window.clearTimeout(bubble.openingBubbleTimer);
+      bubble.openingBubbleTimer = null;
+    }
+
+    bubble.classList.remove("is-visible", "is-left", "is-right", "is-popped", "is-tutorial-target");
+    hideElement(bubble);
+  });
+}
+
+function completeOpeningPathChallenge() {
+  const openingWizard = document.querySelector("#opening-wizard");
+
+  if (!openingWizard || loadingState.pathChallengeFailed) {
+    return;
+  }
+
+  loadingState.pathChallengeActive = false;
+  hideOpeningBubbleOnly();
+  openingWizard.classList.add("is-path-complete");
+
+  if (loadingState.travelHudCompleteTimer) {
+    window.clearTimeout(loadingState.travelHudCompleteTimer);
+    loadingState.travelHudCompleteTimer = null;
+  }
+}
+
+async function startGanjaGoblinsFromOpening() {
+  const loadingScene = document.querySelector('[data-scene="Loading"]');
+  const openingWizard = document.querySelector("#opening-wizard");
+
+  if (!loadingScene || !openingWizard) {
+    return;
+  }
+
+  hideOpeningBubbleOnly();
+  stopOpeningMountainExplosionLoop();
+  loadingState.pathChallengeActive = false;
+  openingWizard.classList.add("is-starting-game");
+  loadingScene.classList.add("is-ending");
+  await waitWhileLandscape(OPENING_GAME_START_FADE_MS);
+  hideElement(openingWizard);
+  openingWizard.classList.remove("is-active", "is-path-running", "is-travel-hud-active", "is-path-complete", "is-starting-game");
+  await playMiniGameIntroSequence();
+}
+
+function failOpeningPathChallenge() {
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingDialogue = document.querySelector("#opening-dialogue");
+
+  if (!openingWizard || loadingState.pathChallengeFailed || !loadingState.pathChallengeActive) {
+    return;
+  }
+
+  loadingState.pathChallengeFailed = true;
+  loadingState.pathChallengeActive = false;
+  loadingState.travelDialogueRunId += 1;
+  hideOpeningBubbleOnly();
+  openingWizard.classList.remove("is-travel-hud-active");
+  openingWizard.classList.add("is-path-failed");
+
+  if (openingDialogue) {
+    openingDialogue.classList.remove("is-visible");
+  }
+
+  if (loadingState.travelHudCompleteTimer) {
+    window.clearTimeout(loadingState.travelHudCompleteTimer);
+    loadingState.travelHudCompleteTimer = null;
+  }
+
+  window.setTimeout(() => {
+    restartOpeningPathChallenge();
+  }, OPENING_PATH_FAIL_RESTART_MS);
+}
+
+async function playOpeningRestartDialogue() {
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingDialogue = document.querySelector("#opening-dialogue");
+  const openingDialogueText = document.querySelector("#opening-dialogue-text");
+
+  if (!openingWizard?.classList.contains("is-path-running") || !openingDialogue || !openingDialogueText) {
+    return;
+  }
+
+  loadingState.travelDialogueRunId += 1;
+  const dialogueRunId = loadingState.travelDialogueRunId;
+  const restartIndex = Math.min(loadingState.pathFailRestartCount, OPENING_WIZARD_RESTART_DIALOGUE.length - 1);
+
+  loadingState.pathFailRestartCount += 1;
+  openingDialogueText.textContent = "";
+  showElement(openingDialogue);
+  window.requestAnimationFrame(() => openingDialogue.classList.add("is-visible"));
+  await waitWhileLandscape(180);
+
+  if (dialogueRunId !== loadingState.travelDialogueRunId || !openingWizard.classList.contains("is-path-running")) {
+    return;
+  }
+
+  await typeWizardSpeech(
+    openingDialogueText,
+    OPENING_WIZARD_RESTART_DIALOGUE[restartIndex],
+    OPENING_WIZARD_DIALOGUE_TYPE_SPEED_MS,
+  );
+  await waitWhileLandscape(2200);
+
+  if (dialogueRunId !== loadingState.travelDialogueRunId) {
+    return;
+  }
+
+  openingDialogue.classList.remove("is-visible");
+  await waitWhileLandscape(240);
+  hideElement(openingDialogue);
+}
+
+async function restartOpeningPathChallenge() {
+  const openingWizard = document.querySelector("#opening-wizard");
+
+  if (!openingWizard?.classList.contains("is-path-running")) {
+    return;
+  }
+
+  openingWizard.classList.remove("is-path-failed", "is-travel-hud-active");
+  openingWizard.classList.remove("is-path-complete", "is-starting-game");
+  openingWizard.classList.remove("is-path-running");
+  void openingWizard.offsetWidth;
+  openingWizard.classList.add("is-path-running");
+
+  loadingState.pathChallengeFailed = false;
+  loadingState.travelHudStarted = false;
+  loadingState.travelHudStartedAt = 0;
+  loadingState.travelDialogueStarted = false;
+  loadingState.travelDialogueRunId += 1;
+  loadingState.pathChallengeActive = false;
+  await playOpeningRestartDialogue();
+  scheduleOpeningTravelHudSequence(OPENING_TRAVEL_HUD_AFTER_TUTORIAL_MS, { playDialogue: false });
+}
+
+function scheduleOpeningTravelHudSequence(delay = OPENING_TRAVEL_HUD_AFTER_TUTORIAL_MS, options = {}) {
+  if (loadingState.travelHudStarted || loadingState.travelHudTimer) {
+    return;
+  }
+
+  loadingState.travelHudTimer = window.setTimeout(async () => {
+    const openingWizard = document.querySelector("#opening-wizard");
+
+    loadingState.travelHudTimer = null;
+
+    if (!openingWizard?.classList.contains("is-path-running")) {
+      return;
+    }
+
+    const shouldPlayDialogue = options.playDialogue !== false;
+    const dialogueComplete = shouldPlayDialogue ? await playOpeningTravelDialogue() : true;
+
+    if (!dialogueComplete || !openingWizard.classList.contains("is-path-running") || loadingState.pathChallengeFailed) {
+      return;
+    }
+
+    loadingState.travelHudStarted = true;
+    loadingState.travelHudStartedAt = performance.now();
+    loadingState.pathChallengeActive = true;
+    openingWizard.classList.remove("is-travel-hud-active");
+    void openingWizard.offsetWidth;
+    openingWizard.classList.add("is-travel-hud-active");
+    scheduleOpeningTapBubble(OPENING_TAP_BUBBLE_DELAY_MS);
+
+    if (loadingState.travelHudCompleteTimer) {
+      window.clearTimeout(loadingState.travelHudCompleteTimer);
+    }
+
+    loadingState.travelHudCompleteTimer = window.setTimeout(() => {
+      completeOpeningPathChallenge();
+    }, OPENING_TRAVEL_HUD_COMPLETE_MS);
+  }, delay);
+}
+
+async function playOpeningTravelDialogue() {
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingDialogue = document.querySelector("#opening-dialogue");
+  const openingDialogueText = document.querySelector("#opening-dialogue-text");
+
+  if (
+    loadingState.travelDialogueStarted ||
+    !openingWizard?.classList.contains("is-path-running") ||
+    !openingDialogue ||
+    !openingDialogueText
+  ) {
+    return;
+  }
+
+  loadingState.travelDialogueStarted = true;
+  loadingState.travelDialogueRunId += 1;
+  const dialogueRunId = loadingState.travelDialogueRunId;
+  openingDialogueText.textContent = "";
+  showElement(openingDialogue);
+  window.requestAnimationFrame(() => openingDialogue.classList.add("is-visible"));
+  await waitWhileLandscape(180);
+
+  for (const line of OPENING_WIZARD_TRAVEL_DIALOGUE) {
+    if (
+      dialogueRunId !== loadingState.travelDialogueRunId ||
+      loadingState.pathChallengeFailed ||
+      !openingWizard.classList.contains("is-path-running")
+    ) {
+      return false;
+    }
+
+    openingDialogueText.textContent = "";
+    await typeWizardSpeech(openingDialogueText, line, OPENING_WIZARD_DIALOGUE_TYPE_SPEED_MS);
+    await waitWhileLandscape(1200);
+  }
+
+  if (dialogueRunId !== loadingState.travelDialogueRunId || loadingState.pathChallengeFailed) {
+    return false;
+  }
+
+  openingDialogue.classList.remove("is-visible");
+  await waitWhileLandscape(240);
+  hideElement(openingDialogue);
+  return true;
+}
+
+function stopOpeningMountainExplosionLoop() {
+  if (loadingState.mountainExplosionTimer) {
+    window.clearTimeout(loadingState.mountainExplosionTimer);
+    loadingState.mountainExplosionTimer = null;
+  }
+}
+
+function triggerOpeningMountainExplosion() {
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingForest = document.querySelector("#opening-forest");
+
+  if (!openingWizard || !openingForest) {
+    return;
+  }
+
+  playSoundEffect("mountainExplosion", { minGap: 1200 });
+  openingWizard.classList.remove("is-mountain-exploding");
+  openingForest.classList.remove("is-mountain-exploding");
+  void openingWizard.offsetWidth;
+  openingWizard.classList.add("is-mountain-exploding");
+  openingForest.classList.add("is-mountain-exploding");
+
+  window.setTimeout(() => {
+    openingWizard.classList.remove("is-mountain-exploding");
+    openingForest.classList.remove("is-mountain-exploding");
+  }, OPENING_MOUNTAIN_EXPLOSION_MS);
+}
+
+function scheduleOpeningMountainExplosionLoop() {
+  const openingWizard = document.querySelector("#opening-wizard");
+
+  if (!openingWizard?.classList.contains("is-path-running")) {
+    return;
+  }
+
+  stopOpeningMountainExplosionLoop();
+
+  const delay =
+    OPENING_RECURRING_EXPLOSION_MIN_MS +
+    Math.random() * (OPENING_RECURRING_EXPLOSION_MAX_MS - OPENING_RECURRING_EXPLOSION_MIN_MS);
+
+  loadingState.mountainExplosionTimer = window.setTimeout(() => {
+    triggerOpeningMountainExplosion();
+    scheduleOpeningMountainExplosionLoop();
+  }, delay);
+}
+
+function scheduleOpeningTapBubble(delay = OPENING_TAP_BUBBLE_INTERVAL_MS) {
+  if (loadingState.tapBubbleTimer) {
+    window.clearTimeout(loadingState.tapBubbleTimer);
+  }
+
+  loadingState.tapBubbleTimer = window.setTimeout(() => {
+    showOpeningTapBubble();
+  }, delay);
+}
+
+function getOpeningBubbleDelay() {
+  if (!loadingState.travelHudStarted || !loadingState.pathChallengeActive) {
+    return OPENING_TAP_BUBBLE_INTERVAL_MS;
+  }
+
+  const progress = getOpeningTravelProgress();
+  const easedProgress = progress * progress;
+  const interval =
+    OPENING_TAP_BUBBLE_INTERVAL_MS -
+    (OPENING_TAP_BUBBLE_INTERVAL_MS - OPENING_TAP_BUBBLE_MIN_INTERVAL_MS) * easedProgress;
+
+  return Math.max(OPENING_TAP_BUBBLE_MIN_INTERVAL_MS, interval);
+}
+
+function getOpeningTravelProgress() {
+  if (!loadingState.travelHudStartedAt) {
+    return 0;
+  }
+
+  const elapsed = Math.max(0, performance.now() - loadingState.travelHudStartedAt);
+  return Math.min(elapsed / OPENING_TRAVEL_HUD_COMPLETE_MS, 1);
+}
+
+function getOpeningBubbleActiveLimit() {
+  return getOpeningTravelProgress() > 0.68 ? 3 : 2;
+}
+
+function getOpeningActiveBubblePositions(bubbles) {
+  return bubbles
+    .filter((candidate) => !candidate.hidden && candidate.classList.contains("is-visible"))
+    .map((candidate) => ({
+      x: Number.parseFloat(candidate.style.getPropertyValue("--bubble-x")) || 0,
+      y: Number.parseFloat(candidate.style.getPropertyValue("--bubble-y")) || 0,
+    }))
+    .filter((position) => position.x > 0 && position.y > 0);
+}
+
+function createOpeningBubblePosition(bubbleSide, dialogueVisible, bubbles) {
+  const activePositions = getOpeningActiveBubblePositions(bubbles);
+  const minDistance = 18;
+  let fallbackPosition = null;
+
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const candidate = {
+      x:
+        bubbleSide === "is-left"
+          ? 10 + Math.random() * 28
+          : dialogueVisible
+            ? 82 + Math.random() * 6
+            : 61 + Math.random() * 29,
+      y: dialogueVisible ? 48 + Math.random() * 14 : 25 + Math.random() * 38,
+    };
+
+    fallbackPosition = candidate;
+
+    const hasEnoughRoom = activePositions.every((position) => {
+      const distance = Math.hypot(candidate.x - position.x, candidate.y - position.y);
+      return distance >= minDistance;
+    });
+
+    if (hasEnoughRoom) {
+      return candidate;
+    }
+  }
+
+  return fallbackPosition || { x: bubbleSide === "is-left" ? 18 : 72, y: 38 };
+}
+
+function showOpeningTapBubble() {
+  const openingWizard = document.querySelector("#opening-wizard");
+  const bubbles = [...document.querySelectorAll(".opening-tap-bubble")];
+  const activeBubbleCount = bubbles.filter((candidate) => !candidate.hidden && candidate.classList.contains("is-visible")).length;
+
+  if (loadingState.tapBubbleTutorialSeen && activeBubbleCount >= getOpeningBubbleActiveLimit()) {
+    if (loadingState.pathChallengeActive) {
+      scheduleOpeningTapBubble(Math.max(220, getOpeningBubbleDelay() * 0.45));
+    }
+
+    return;
+  }
+
+  const bubble =
+    !loadingState.tapBubbleTutorialSeen
+      ? document.querySelector("#opening-tap-bubble")
+      : bubbles.find((candidate) => candidate.hidden || !candidate.classList.contains("is-visible"));
+  const button = bubble?.querySelector(".opening-tap-bubble__button");
+  const tutorial = document.querySelector("#opening-tap-tutorial");
+  const tutorialText = tutorial?.querySelector("p");
+  const tutorialPrompt = tutorial?.querySelector("span");
+  const openingDialogue = document.querySelector("#opening-dialogue");
+
+  if (!openingWizard || !bubble || !button || !openingWizard.classList.contains("is-path-running")) {
+    if (loadingState.pathChallengeActive) {
+      scheduleOpeningTapBubble(getOpeningBubbleDelay());
+    }
+
+    return;
+  }
+
+  const dialogueVisible = openingDialogue?.classList.contains("is-visible");
+  const bubbleSide = Math.random() < 0.5 ? "is-left" : "is-right";
+  const bubblePosition = createOpeningBubblePosition(bubbleSide, dialogueVisible, bubbles);
+
+  bubble.classList.remove("is-visible", "is-left", "is-right", "is-popped", "is-tutorial-target");
+  bubble.classList.add(bubbleSide);
+  bubble.style.setProperty("--bubble-x", `${bubblePosition.x}vw`);
+  bubble.style.setProperty("--bubble-y", `${bubblePosition.y}vh`);
+  tutorial?.style.setProperty("--bubble-x", `${bubblePosition.x}vw`);
+  tutorial?.style.setProperty("--bubble-y", `${bubblePosition.y}vh`);
+  showElement(bubble);
+
+  const handleTap = () => {
+    if (!loadingState.tapBubbleTutorialSeen && !openingWizard.classList.contains("is-tap-tutorial-ready")) {
+      return;
+    }
+
+    const shouldStartTravelAfterPop =
+      loadingState.tapBubbleTutorialSeen &&
+      openingWizard.classList.contains("is-tap-tutorial-ready") &&
+      !loadingState.travelHudStarted;
+    const isTutorialReadyTap = openingWizard.classList.contains("is-tap-tutorial-ready");
+
+    if (!isTutorialReadyTap) {
+      const shownAt = Number(bubble.dataset.shownAt || 0);
+      const bubbleAge = performance.now() - shownAt;
+
+      if (!loadingState.pathChallengeActive || bubbleAge < OPENING_TAP_SUCCESS_START_MS) {
+        failOpeningPathChallenge();
+        return;
+      }
+    }
+
+    if (loadingState.tapBubbleTimer) {
+      if (isTutorialReadyTap) {
+        window.clearTimeout(loadingState.tapBubbleTimer);
+        loadingState.tapBubbleTimer = null;
+      }
+    }
+
+    if (bubble.openingBubbleTimer) {
+      window.clearTimeout(bubble.openingBubbleTimer);
+      bubble.openingBubbleTimer = null;
+    }
+
+    if (isTutorialReadyTap && loadingState.tapBubbleTutorialTimer) {
+      window.clearTimeout(loadingState.tapBubbleTutorialTimer);
+      loadingState.tapBubbleTutorialTimer = null;
+    }
+
+    openingWizard.classList.remove("is-tap-tutorial-paused", "is-tap-tutorial-ready");
+    tutorial?.classList.remove("is-visible", "is-ready");
+    if (tutorial) {
+      window.setTimeout(() => hideElement(tutorial), 180);
+    }
+
+    bubble.classList.add("is-popped");
+    playSoundEffect("tapPop", { minGap: 60 });
+    window.setTimeout(() => {
+      bubble.classList.remove("is-popped", "is-visible", "is-tutorial-target");
+      hideElement(bubble);
+      if (shouldStartTravelAfterPop) {
+        scheduleOpeningTravelHudSequence();
+        return;
+      }
+
+      if (loadingState.pathChallengeActive) {
+        scheduleOpeningTapBubble(getOpeningBubbleDelay());
+      }
+    }, 560);
+  };
+
+  button.onclick = handleTap;
+
+  void bubble.offsetWidth;
+
+  if (!loadingState.tapBubbleTutorialSeen && tutorial && tutorialText && tutorialPrompt) {
+    openingWizard.classList.add("is-tap-tutorial-paused");
+    bubble.classList.add("is-visible", "is-tutorial-target");
+    tutorial.classList.remove("is-visible", "is-left", "is-right");
+    tutorial.classList.add(bubbleSide);
+    tutorialText.textContent = "Pop the bubble when the outer ring reaches the bubble's circumference";
+    tutorialPrompt.textContent = "Press anywhere to continue";
+    tutorialPrompt.hidden = false;
+    showElement(tutorial);
+
+    const startBubble = () => {
+      openingWizard.classList.remove("is-tap-tutorial-paused");
+      tutorial.classList.remove("is-visible");
+      window.setTimeout(() => hideElement(tutorial), 180);
+      void bubble.offsetWidth;
+      bubble.classList.remove("is-visible", "is-tutorial-target");
+      void bubble.offsetWidth;
+      bubble.dataset.shownAt = String(performance.now());
+      bubble.classList.add("is-visible", "is-tutorial-target");
+
+      loadingState.tapBubbleTutorialTimer = window.setTimeout(() => {
+        loadingState.tapBubbleTutorialSeen = true;
+        openingWizard.classList.add("is-tap-tutorial-paused", "is-tap-tutorial-ready");
+        tutorial.classList.remove("is-visible", "is-left", "is-right");
+        tutorial.classList.add(bubbleSide, "is-ready");
+        tutorialText.textContent = "Pop the bubble";
+        tutorialPrompt.hidden = true;
+        showElement(tutorial);
+        window.requestAnimationFrame(() => tutorial.classList.add("is-visible"));
+      }, OPENING_TAP_TUTORIAL_READY_MS);
+    };
+
+    tutorial.onclick = startBubble;
+    window.setTimeout(() => tutorial.classList.add("is-visible"), 20);
+    return;
+  }
+
+  bubble.dataset.shownAt = String(performance.now());
+  bubble.classList.add("is-visible");
+
+  if (loadingState.pathChallengeActive) {
+    scheduleOpeningTapBubble(getOpeningBubbleDelay());
+  }
+
+  bubble.openingBubbleTimer = window.setTimeout(() => {
+    bubble.openingBubbleTimer = null;
+
+    if (loadingState.pathChallengeActive) {
+      failOpeningPathChallenge();
+      return;
+    }
+
+    bubble.classList.remove("is-visible");
+    window.setTimeout(() => {
+      hideElement(bubble);
+    }, 220);
+  }, OPENING_TAP_BUBBLE_WINDOW_MS);
+}
+
+function buildOpeningForestScene() {
+  const forest = document.querySelector("#opening-forest");
+
+  if (!forest || forest.dataset.generated === "true") {
+    return;
+  }
+
+  forest.dataset.generated = "true";
+
+  const sky = document.createElement("div");
+  sky.className = "opening-forest__sky";
+
+  const stars = document.createElement("div");
+  stars.className = "opening-forest__stars";
+
+  OPENING_SKY_STARS.forEach(([x, y, scale], index) => {
+    const star = document.createElement("span");
+    star.className = "opening-forest__star";
+    star.style.setProperty("--x", `${x}%`);
+    star.style.setProperty("--y", `${y}%`);
+    star.style.setProperty("--scale", scale);
+    star.style.setProperty("--delay", `${(index % 9) * -0.43}s`);
+    stars.append(star);
+  });
+
+  const constellation = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  constellation.classList.add("opening-forest__constellation");
+  constellation.classList.add(Math.random() < 0.5 ? "is-left" : "is-right");
+  constellation.setAttribute("viewBox", "0 0 117 30");
+  constellation.setAttribute("aria-hidden", "true");
+
+  OPENING_CONSTELLATION_PATHS.forEach((pathData, index) => {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", pathData);
+    path.setAttribute("pathLength", "1");
+    path.style.setProperty("--draw-delay", `${index * 0.34}s`);
+    constellation.append(path);
+  });
+
+  const constellationPoints = [...new Set(OPENING_CONSTELLATION_PATHS.join(" ").match(/\d+(?:\.\d+)? \d+(?:\.\d+)?/g) ?? [])];
+
+  constellationPoints.forEach((point) => {
+    const [cx, cy] = point.split(" ");
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", cx);
+    circle.setAttribute("cy", cy);
+    circle.setAttribute("r", "0.72");
+    constellation.append(circle);
+  });
+
+  stars.append(constellation);
+
+  const partyLights = document.createElement("div");
+  partyLights.className = "opening-forest__party-lights";
+
+  for (let index = 0; index < 4; index += 1) {
+    const beam = document.createElement("span");
+    beam.className = `opening-forest__party-light opening-forest__party-light--${index + 1}`;
+    partyLights.append(beam);
+  }
+
+  const fireworks = document.createElement("div");
+  fireworks.className = "opening-forest__fireworks";
+
+  for (let index = 0; index < 5; index += 1) {
+    const burst = document.createElement("span");
+    burst.className = `opening-forest__firework opening-forest__firework--${index + 1}`;
+    fireworks.append(burst);
+  }
+
+  const mountainExplosion = document.createElement("div");
+  mountainExplosion.className = "opening-forest__mountain-explosion";
+
+  const bigFireworks = document.createElement("div");
+  bigFireworks.className = "opening-forest__big-fireworks";
+
+  for (let index = 0; index < 2; index += 1) {
+    const shell = document.createElement("span");
+    shell.className = `opening-forest__big-firework opening-forest__big-firework--${index + 1}`;
+    shell.innerHTML = '<span class="opening-forest__big-firework-rocket"></span><span class="opening-forest__big-firework-burst"></span>';
+    bigFireworks.append(shell);
+  }
+
+  const horizon = document.createElement("div");
+  horizon.className = "opening-forest__horizon";
+
+  const path = document.createElement("div");
+  path.className = "opening-forest__path";
+
+  const speedLines = document.createElement("div");
+  speedLines.className = "opening-forest__speed-lines";
+
+  for (let index = 0; index < 14; index += 1) {
+    const line = document.createElement("span");
+    line.style.setProperty("--x", `${8 + ((index * 13) % 84)}vw`);
+    line.style.setProperty("--delay", `${index * -0.19}s`);
+    line.style.setProperty("--length", `${10 + (index % 5) * 4}vh`);
+    speedLines.append(line);
+  }
+
+  const travelHud = document.createElement("div");
+  travelHud.className = "opening-travel-hud";
+  travelHud.innerHTML = `
+    <span class="opening-travel-hud__line"></span>
+    <span class="opening-travel-hud__post opening-travel-hud__post--start"></span>
+    <span class="opening-travel-hud__post opening-travel-hud__post--end"></span>
+    <span class="opening-travel-hud__treasure" aria-hidden="true"></span>
+    <span class="opening-travel-hud__marker" aria-hidden="true"></span>
+    <button type="button" class="opening-travel-hud__play">
+      <span class="opening-travel-hud__goblin" aria-hidden="true"></span>
+      <span>play</span>
+    </button>
+  `;
+  travelHud.querySelector(".opening-travel-hud__play")?.addEventListener("click", startGanjaGoblinsFromOpening);
+
+  forest.append(sky, stars, partyLights, fireworks, mountainExplosion, bigFireworks, horizon, path, speedLines, travelHud);
+
+  OPENING_FOREST_PROPS.forEach((prop, index) => {
+    const model = document.createElement("div");
+    model.className = `opening-forest__prop opening-forest__start-prop opening-forest__prop--${prop.type}`;
+    const sideDirection = prop.x < 50 ? -1 : 1;
+    const distanceFromCenter = Math.abs(prop.x - 50);
+    const endShift = sideDirection * Math.max(86, distanceFromCenter * 2.25);
+    const endDrop = Math.max(170, 202 - prop.y);
+    const endScale = Math.max(prop.scale + 1.5, prop.scale * 2.15);
+    model.style.setProperty("--x", `${prop.x}%`);
+    model.style.setProperty("--y", `${prop.y}vh`);
+    const sizeMultiplier = prop.type === "tree" ? 1.14 : 1.07;
+    model.style.setProperty("--size", `${prop.size * sizeMultiplier}vmin`);
+    model.style.setProperty("--scale", prop.scale);
+    model.style.setProperty("--z", prop.z);
+    model.style.setProperty("--alpha", prop.alpha);
+    model.style.setProperty("--end-shift", `${endShift}vw`);
+    model.style.setProperty("--end-drop", `${endDrop}vh`);
+    model.style.setProperty("--early-shift", `${endShift * 0.16}vw`);
+    model.style.setProperty("--early-drop", `${endDrop * 0.16}vh`);
+    model.style.setProperty("--mid-shift", `${endShift * 0.48}vw`);
+    model.style.setProperty("--mid-drop", `${endDrop * 0.48}vh`);
+    model.style.setProperty("--near-shift", `${endShift * 0.78}vw`);
+    model.style.setProperty("--near-drop", `${endDrop * 0.78}vh`);
+    model.style.setProperty("--end-scale", endScale);
+    model.style.setProperty("--early-scale", prop.scale + (endScale - prop.scale) * 0.16);
+    model.style.setProperty("--mid-scale", prop.scale + (endScale - prop.scale) * 0.48);
+    model.style.setProperty("--near-scale", prop.scale + (endScale - prop.scale) * 0.78);
+    model.style.setProperty("--run-duration", `${5.25 + (index % 4) * 0.16}s`);
+    model.style.setProperty("--run-delay", `${index * 0.025}s`);
+    forest.append(model);
+  });
+
+  const createRunProp = (prop, index) => {
+    const model = document.createElement("div");
+    model.className = `opening-forest__run-prop opening-forest__prop--${prop.type}`;
+
+    const sizeMultiplier = prop.type === "tree" ? 1.18 : 1.08;
+    const endScale = prop.type === "tree" ? prop.endScale * 1.05 : prop.endScale;
+    model.style.setProperty("--z", 40 - index);
+    model.style.setProperty("--start-x", `${prop.startX}%`);
+    model.style.setProperty("--start-y", `${prop.startY}vh`);
+    model.style.setProperty("--end-shift", `${prop.endShift}vw`);
+    model.style.setProperty("--end-drop", `${prop.endDrop}vh`);
+    model.style.setProperty("--early-shift", `${prop.endShift * 0.16}vw`);
+    model.style.setProperty("--early-drop", `${prop.endDrop * 0.16}vh`);
+    model.style.setProperty("--mid-shift", `${prop.endShift * 0.48}vw`);
+    model.style.setProperty("--mid-drop", `${prop.endDrop * 0.48}vh`);
+    model.style.setProperty("--near-shift", `${prop.endShift * 0.78}vw`);
+    model.style.setProperty("--near-drop", `${prop.endDrop * 0.78}vh`);
+    model.style.setProperty("--base-size", `${prop.size * sizeMultiplier}vmin`);
+    model.style.setProperty("--end-scale", endScale);
+    model.style.setProperty("--early-scale", 0.12 + (endScale - 0.12) * 0.16);
+    model.style.setProperty("--mid-scale", 0.12 + (endScale - 0.12) * 0.48);
+    model.style.setProperty("--near-scale", 0.12 + (endScale - 0.12) * 0.78);
+    model.style.setProperty("--run-duration", `${prop.duration}s`);
+    model.style.setProperty("--run-delay", `${prop.delay}s`);
+    forest.append(model);
+  };
+
+  OPENING_FOREST_RUN_PROPS.forEach((prop, index) => {
+    createRunProp(prop, index);
+  });
+
+}
+
 function showActiveSurface() {
   const terminalPanel = document.querySelector(".terminal-panel");
   const transmissionMessage = document.querySelector("#transmission-message");
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingDialogue = document.querySelector("#opening-dialogue");
+  const openingDialogueText = document.querySelector("#opening-dialogue-text");
   const wizardHologram = document.querySelector("#wizard-hologram");
   const wizardSpeech = document.querySelector("#wizard-speech");
   const wizardQuestion = document.querySelector("#wizard-question");
@@ -737,6 +1629,9 @@ function showActiveSurface() {
   if (
     !terminalPanel ||
     !transmissionMessage ||
+    !openingWizard ||
+    !openingDialogue ||
+    !openingDialogueText ||
     !wizardHologram ||
     !wizardSpeech ||
     !wizardQuestion ||
@@ -750,6 +1645,7 @@ function showActiveSurface() {
     showElement(wizardQuestion);
     hideElement(terminalPanel);
     hideElement(transmissionMessage);
+    hideElement(openingWizard);
     hideElement(wizardHologram);
     hideElement(wizardSpeech);
     hideElement(miniGameIntro);
@@ -761,6 +1657,7 @@ function showActiveSurface() {
     hideElement(wizardQuestion);
     showElement(terminalPanel);
     hideElement(transmissionMessage);
+    hideElement(openingWizard);
     hideElement(wizardHologram);
     hideElement(wizardSpeech);
     hideElement(miniGameIntro);
@@ -772,6 +1669,7 @@ function showActiveSurface() {
     hideElement(wizardQuestion);
     hideElement(terminalPanel);
     showElement(transmissionMessage);
+    hideElement(openingWizard);
     hideElement(wizardHologram);
     hideElement(wizardSpeech);
     hideElement(miniGameIntro);
@@ -783,6 +1681,7 @@ function showActiveSurface() {
     hideElement(wizardQuestion);
     hideElement(terminalPanel);
     hideElement(transmissionMessage);
+    hideElement(openingWizard);
     showElement(wizardHologram);
 
     if (loadingState.wizardSpeechStarted) {
@@ -796,10 +1695,23 @@ function showActiveSurface() {
     return;
   }
 
+  if (loadingState.activeSurface === "openingWizard") {
+    hideElement(wizardQuestion);
+    hideElement(terminalPanel);
+    hideElement(transmissionMessage);
+    showElement(openingWizard);
+    hideElement(wizardHologram);
+    hideElement(wizardSpeech);
+    hideElement(miniGameIntro);
+    hideElement(miniGameCanvas);
+    return;
+  }
+
   if (loadingState.activeSurface === "miniGameIntro") {
     hideElement(wizardQuestion);
     hideElement(terminalPanel);
     hideElement(transmissionMessage);
+    hideElement(openingWizard);
     hideElement(wizardHologram);
     hideElement(wizardSpeech);
     showElement(miniGameIntro);
@@ -811,6 +1723,7 @@ function showActiveSurface() {
     hideElement(wizardQuestion);
     hideElement(terminalPanel);
     hideElement(transmissionMessage);
+    hideElement(openingWizard);
     hideElement(wizardHologram);
     hideElement(wizardSpeech);
     hideElement(miniGameIntro);
@@ -821,11 +1734,16 @@ function showActiveSurface() {
 function hideLoadingSurfaces() {
   const terminalPanel = document.querySelector(".terminal-panel");
   const transmissionMessage = document.querySelector("#transmission-message");
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingDialogue = document.querySelector("#opening-dialogue");
   const wizardHologram = document.querySelector("#wizard-hologram");
   const wizardSpeech = document.querySelector("#wizard-speech");
   const wizardQuestion = document.querySelector("#wizard-question");
   const miniGameIntro = document.querySelector("#mini-game-intro");
   const miniGameCanvas = document.querySelector("#mini-game-canvas");
+
+  stopOpeningTapBubbleGame();
+  stopOpeningMountainExplosionLoop();
 
   if (wizardQuestion) {
     hideElement(wizardQuestion);
@@ -845,6 +1763,14 @@ function hideLoadingSurfaces() {
 
   if (transmissionMessage) {
     hideElement(transmissionMessage);
+  }
+
+  if (openingWizard) {
+    hideElement(openingWizard);
+  }
+
+  if (openingDialogue) {
+    hideElement(openingDialogue);
   }
 
   if (wizardHologram) {
@@ -1009,7 +1935,74 @@ async function playTransmissionBlinkSequence() {
   }
 
   hideLoadingSurfaces();
-  await playWizardHologramSequence();
+  await playOpeningWizardSequence();
+}
+
+async function playOpeningWizardSequence() {
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingForest = document.querySelector("#opening-forest");
+  const openingDialogue = document.querySelector("#opening-dialogue");
+  const openingDialogueText = document.querySelector("#opening-dialogue-text");
+
+  if (!openingWizard || !openingForest || !openingDialogue || !openingDialogueText) {
+    return;
+  }
+
+  buildOpeningForestScene();
+  await waitWhileLandscape(240);
+
+  loadingState.activeSurface = "openingWizard";
+  openingWizard.classList.remove("is-active");
+  openingWizard.classList.remove("is-path-running");
+  openingWizard.classList.remove("is-mountain-exploding");
+  openingWizard.classList.remove("is-travel-hud-active");
+  openingWizard.classList.remove("is-path-complete", "is-starting-game");
+  openingForest.classList.remove("is-mountain-exploding");
+  stopOpeningTapBubbleGame();
+  stopOpeningMountainExplosionLoop();
+  loadingState.travelHudStarted = false;
+  loadingState.travelHudStartedAt = 0;
+  loadingState.travelDialogueStarted = false;
+  loadingState.travelDialogueRunId += 1;
+  loadingState.pathChallengeActive = false;
+  loadingState.pathChallengeFailed = false;
+  loadingState.pathFailRestartCount = 0;
+  loadingState.tapBubbleTutorialSeen = false;
+  openingDialogue.classList.remove("is-visible");
+  openingDialogueText.textContent = "";
+  hideElement(openingDialogue);
+  showActiveSurface();
+
+  // Restart the CSS animation whenever this sequence is replayed.
+  void openingWizard.offsetWidth;
+  openingWizard.classList.add("is-active");
+
+  await waitWhileLandscape(OPENING_WIZARD_RUN_MS);
+  await waitWhileLandscape(OPENING_WIZARD_IDLE_BEFORE_DIALOGUE_MS);
+
+  showElement(openingDialogue);
+  window.requestAnimationFrame(() => {
+    openingDialogue.classList.add("is-visible");
+  });
+
+  await waitWhileLandscape(260);
+  await typeWizardSpeech(openingDialogueText, OPENING_WIZARD_FIRST_DIALOGUE, OPENING_WIZARD_DIALOGUE_TYPE_SPEED_MS);
+  await waitWhileLandscape(OPENING_WIZARD_DIALOGUE_PAUSE_MS);
+
+  triggerOpeningMountainExplosion();
+  await waitWhileLandscape(OPENING_MOUNTAIN_EXPLOSION_MS);
+
+  openingDialogueText.textContent = "";
+  await waitWhileLandscape(220);
+  await typeWizardSpeech(openingDialogueText, OPENING_WIZARD_SECOND_DIALOGUE, OPENING_WIZARD_DIALOGUE_TYPE_SPEED_MS);
+  await waitWhileLandscape(OPENING_WIZARD_DIALOGUE_PAUSE_MS);
+
+  openingDialogue.classList.remove("is-visible");
+  await waitWhileLandscape(240);
+  hideElement(openingDialogue);
+  openingWizard.classList.add("is-path-running");
+  scheduleOpeningTravelHudSequence(OPENING_TRAVEL_HUD_AFTER_TUTORIAL_MS);
+  scheduleOpeningMountainExplosionLoop();
 }
 
 async function playWizardHologramSequence() {
@@ -1068,12 +2061,14 @@ async function playWizardSpeechSequence() {
   await playMiniGameIntroSequence();
 }
 
-async function typeWizardSpeech(speechText, text) {
+async function typeWizardSpeech(speechText, text, speed = WIZARD_SPEECH_TYPE_SPEED_MS) {
+  await unlockTypingAudio().catch(() => {});
+
   for (const character of text) {
     await waitForLandscape();
     startTypingSound();
     speechText.textContent += character;
-    await waitWhileLandscape(WIZARD_SPEECH_TYPE_SPEED_MS);
+    await waitWhileLandscape(speed);
   }
 
   stopTypingSound();
@@ -1088,9 +2083,15 @@ async function playMiniGameIntroSequence() {
   }
 
   loadingScene.classList.remove("is-ending");
+  miniGameIntro.classList.add("is-entering");
   loadingState.activeSurface = "miniGameIntro";
   showActiveSurface();
   loadRetroFxSound();
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      miniGameIntro.classList.remove("is-entering");
+    });
+  });
 
   await waitForScreenPress();
   await waitForLandscape();
@@ -1119,6 +2120,7 @@ function startMiniGamePrelude() {
   miniGameState.context = canvas.getContext("2d");
   miniGameState.status = "prelude";
   miniGameState.isRunning = true;
+  miniGameState.failedRetryCount = 0;
   miniGameState.preludeStartedAt = performance.now();
   miniGameState.preludeTimerGlitchSoundPlayed = false;
   miniGameState.preludeObstacles = createForestObstacles();
@@ -1197,11 +2199,15 @@ function startMiniGame() {
     miniGameState.startedAt + MINI_GAME_FROG_EVENT_START_MS + Math.random() * 6000;
   miniGameState.frogSpawnCount = 0;
   miniGameState.gameplayFadeStartedAt = miniGameState.preludeStartedAt + 11200;
+  miniGameState.wizardTipStartedAt = miniGameState.lastFrameTime + MINI_GAME_WIZARD_TIP_DELAY_MS;
+  miniGameState.wizardTipTypingActive = false;
   miniGameState.lastFireTime = -MINI_GAME_FIRE_COOLDOWN_MS;
   miniGameState.goldenAppleSpawnTimes = createGoldenAppleSpawnTimes(miniGameState.startedAt);
   miniGameState.level = 1;
   miniGameState.applesTowardNextLevel = 0;
   miniGameState.status = "playing";
+  miniGameState.failedAt = 0;
+  miniGameState.failedButtons = null;
   miniGameState.bossSpawned = false;
   miniGameState.shakeUntil = 0;
   miniGameState.shakeIntensity = 0;
@@ -1215,6 +2221,7 @@ function startMiniGame() {
   loadingState.activeSurface = "miniGame";
   showActiveSurface();
   resizeMiniGameCanvas();
+  unlockTypingAudio().catch(() => {});
 
   canvas.addEventListener("pointerdown", handleMiniGamePress);
   canvas.addEventListener("pointermove", handleMiniGameAim);
@@ -1535,19 +2542,79 @@ function getTurretPosition() {
 }
 
 function handleMiniGamePress(event) {
-  if (!loadingState.isLandscape || !miniGameState.isRunning || miniGameState.status !== "playing") {
+  if (!loadingState.isLandscape || !miniGameState.isRunning) {
     return;
   }
 
   unlockGameAudio();
   const canvasRect = miniGameState.canvas.getBoundingClientRect();
-  miniGameState.aimTarget = {
+  const pressPoint = {
     x: event.clientX - canvasRect.left,
     y: event.clientY - canvasRect.top,
+  };
+
+  if (miniGameState.status === "failed") {
+    handleFailedMiniGamePress(pressPoint);
+    return;
+  }
+
+  if (miniGameState.status !== "playing") {
+    return;
+  }
+
+  miniGameState.aimTarget = {
+    x: pressPoint.x,
+    y: pressPoint.y,
   };
   updateTurretAim();
 
   fireMiniGameBullet(performance.now(), true);
+}
+
+function handleFailedMiniGamePress(point) {
+  const buttons = miniGameState.failedButtons;
+
+  if (!buttons) {
+    return;
+  }
+
+  if (isPointInsideRect(point, buttons.retry)) {
+    playSoundEffect("menuStart", { minGap: 120 });
+    miniGameState.failedRetryCount += 1;
+    startMiniGame();
+    return;
+  }
+
+  if (isPointInsideRect(point, buttons.skip)) {
+    if (buttons.skip.disabled) {
+      playSoundEffect("tapPop", { minGap: 120, volume: 0.45 });
+      return;
+    }
+
+    playSoundEffect("menuStart", { minGap: 120 });
+    miniGameState.status = "skipped";
+    miniGameState.isRunning = false;
+    miniGameState.failedButtons = null;
+    miniGameState.bullets = [];
+    miniGameState.goblins = [];
+    miniGameState.apples = [];
+    miniGameState.tikiMen = [];
+    miniGameState.lavaSnakes = [];
+    miniGameState.helperFairies = [];
+    if (miniGameState.context) {
+      miniGameState.context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    }
+  }
+}
+
+function isPointInsideRect(point, rect) {
+  return (
+    rect &&
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  );
 }
 
 function handleMiniGameAim(event) {
@@ -1659,6 +2726,8 @@ function updateMiniGame(timestamp) {
   if (loadingState.isLandscape && miniGameState.status === "finishing") {
     updateMiniGameFinish(timestamp, deltaSeconds);
   } else if (loadingState.isLandscape && miniGameState.status === "playing") {
+    updateMiniGameWizardTip(timestamp);
+
     if (timestamp - miniGameState.startedAt >= MINI_GAME_DURATION_MS) {
       startBossPhase();
     }
@@ -1685,8 +2754,32 @@ function updateMiniGame(timestamp) {
     trimMiniGameObjects();
   }
 
+  if (miniGameState.status !== "playing" && miniGameState.wizardTipTypingActive) {
+    miniGameState.wizardTipTypingActive = false;
+    stopTypingSound();
+  }
+
   drawMiniGame();
   miniGameState.animationFrame = window.requestAnimationFrame(updateMiniGame);
+}
+
+function updateMiniGameWizardTip(timestamp) {
+  if (!miniGameState.wizardTipStartedAt) {
+    return;
+  }
+
+  const age = timestamp - miniGameState.wizardTipStartedAt;
+  const typeDuration = MINI_GAME_WIZARD_TIP_TEXT.length * MINI_GAME_WIZARD_TIP_TYPE_SPEED_MS;
+  const isTyping = age >= 0 && age < typeDuration;
+
+  if (isTyping && !miniGameState.wizardTipTypingActive) {
+    miniGameState.wizardTipTypingActive = startTypingSound();
+  }
+
+  if (!isTyping && miniGameState.wizardTipTypingActive) {
+    miniGameState.wizardTipTypingActive = false;
+    stopTypingSound();
+  }
 }
 
 function maybeSpawnGoblin(timestamp) {
@@ -1758,11 +2851,8 @@ function updateMiniGameFinish(timestamp, deltaSeconds) {
     return;
   }
 
-  window.setTimeout(() => {
-    if (miniGameState.status === "failed") {
-      startMiniGame();
-    }
-  }, MINI_GAME_FAIL_RESTART_MS);
+  miniGameState.failedAt = timestamp;
+  miniGameState.failedButtons = null;
 }
 
 function startMiniGameFinish(kind, x, y) {
@@ -2527,18 +3617,51 @@ function createSmokeDeath(x, y, size) {
   miniGameState.smokeDeaths.push({
     x,
     y,
+    originX: x,
+    originY: y,
     size,
     startedAt: now,
     exploded: false,
     phase: Math.random() * Math.PI * 2,
+    vx: (Math.random() > 0.5 ? 1 : -1) * (120 + Math.random() * 90),
+    vy: -70 - Math.random() * 90,
+    smokePuffs: [],
+    lastPuffAt: now,
+    lastFlySoundAt: 0,
   });
 }
 
 function updateSmokeDeaths(timestamp) {
   miniGameState.smokeDeaths.forEach((death) => {
     const age = timestamp - death.startedAt;
+    const flightAge = Math.max(0, age - 650);
 
-    if (!death.exploded && age >= 1350) {
+    if (!death.exploded && flightAge > 0) {
+      const seconds = flightAge / 1000;
+      death.x = death.originX + death.vx * seconds * 0.42 + Math.sin(seconds * 11 + death.phase) * 54;
+      death.y = death.originY + death.vy * seconds * 0.34 + Math.cos(seconds * 15 + death.phase) * 38;
+      death.x = Math.max(34, Math.min(window.innerWidth - 34, death.x));
+      death.y = Math.max(38, Math.min(window.innerHeight - 58, death.y));
+
+      if (timestamp - death.lastFlySoundAt > 190) {
+        death.lastFlySoundAt = timestamp;
+        playSoundEffect("smokeGoblinFly", { minGap: 45 });
+      }
+
+      if (timestamp - death.lastPuffAt > 95) {
+        death.lastPuffAt = timestamp;
+        death.smokePuffs.push({
+          x: death.x + (Math.random() - 0.5) * death.size * 0.6,
+          y: death.y + (Math.random() - 0.5) * death.size * 0.4,
+          size: 5 + Math.random() * 8,
+          startedAt: timestamp,
+        });
+      }
+    }
+
+    death.smokePuffs = death.smokePuffs.filter((puff) => timestamp - puff.startedAt < 850);
+
+    if (!death.exploded && age >= 2000) {
       death.exploded = true;
       death.explodedAt = timestamp;
       triggerGreenSmokeBlast(death.x, death.y);
@@ -3205,12 +4328,215 @@ function drawMiniGame() {
   drawHitMarkers(context);
   drawTurret(context);
   context.restore();
+  drawFailedGameplayFade(context, gameplayOpacity);
   drawMiniGameFinishEffect(context);
+  drawMiniGameWizardTipOverlay(context);
   drawMiniGameHud(context);
-  drawLevelMessages(context);
+  if (miniGameState.status === "playing") {
+    drawLevelMessages(context);
+  }
+}
+
+function drawMiniGameWizardTipOverlay(context) {
+  if (miniGameState.status !== "playing" || !miniGameState.wizardTipStartedAt) {
+    return;
+  }
+
+  const now = performance.now();
+  const age = now - miniGameState.wizardTipStartedAt;
+  const typeDuration = MINI_GAME_WIZARD_TIP_TEXT.length * MINI_GAME_WIZARD_TIP_TYPE_SPEED_MS;
+  const exitStart = typeDuration + MINI_GAME_WIZARD_TIP_HOLD_MS;
+  const totalDuration = exitStart + MINI_GAME_WIZARD_TIP_EXIT_MS;
+
+  if (age < 0 || age > totalDuration) {
+    return;
+  }
+
+  const enter = Math.min(age / 520, 1);
+  const exit = age > exitStart ? Math.min((age - exitStart) / MINI_GAME_WIZARD_TIP_EXIT_MS, 1) : 0;
+  const easedEnter = 1 - Math.pow(1 - enter, 3);
+  const easedExit = exit * exit;
+  const opacity = Math.max(0, Math.min(easedEnter, 1 - easedExit));
+  const wizardScale = Math.max(1.15, Math.min(1.55, window.innerHeight / 280));
+  const wizardX = Math.max(34, window.innerWidth * 0.12);
+  const wizardY = window.innerHeight + 8 - easedEnter * 104 + easedExit * 120;
+  const typedCharacters = Math.min(
+    MINI_GAME_WIZARD_TIP_TEXT.length,
+    Math.max(0, Math.floor(age / MINI_GAME_WIZARD_TIP_TYPE_SPEED_MS))
+  );
+  const visibleText = MINI_GAME_WIZARD_TIP_TEXT.slice(0, typedCharacters);
+  const bubbleX = Math.min(window.innerWidth - 230, wizardX + 92 * wizardScale);
+  const bubbleY = Math.max(54, window.innerHeight - 162);
+  const bubbleWidth = Math.min(360, window.innerWidth - bubbleX - 18);
+  const bubbleHeight = Math.max(74, Math.min(106, window.innerHeight * 0.27));
+
+  context.save();
+  context.globalAlpha = opacity;
+  drawLargeRetroWizardBust(context, wizardX, wizardY, wizardScale, now);
+  drawWizardTipBubble(context, bubbleX, bubbleY, bubbleWidth, bubbleHeight, visibleText, typedCharacters < MINI_GAME_WIZARD_TIP_TEXT.length);
+  context.restore();
+}
+
+function drawLargeRetroWizardBust(context, x, y, scale, now) {
+  const bob = Math.sin(now / 360) * 2;
+
+  context.save();
+  context.translate(x, y + bob);
+  context.scale(scale, scale);
+  context.shadowColor = "rgba(92, 255, 146, 0.38)";
+  context.shadowBlur = 18;
+
+  context.fillStyle = "#07160d";
+  context.fillRect(-42, -104, 86, 76);
+  context.fillStyle = "#123d32";
+  context.fillRect(-35, -100, 70, 72);
+  context.fillStyle = "#1e6654";
+  context.fillRect(-26, -98, 22, 68);
+  context.fillStyle = "#9ee36a";
+  context.fillRect(-28, -88, 8, 8);
+  context.fillRect(19, -73, 7, 7);
+  context.fillRect(1, -49, 8, 8);
+
+  context.fillStyle = "#0a221c";
+  context.fillRect(-54, -116, 110, 18);
+  context.fillRect(-34, -149, 62, 34);
+  context.fillRect(-23, -171, 48, 24);
+  context.fillRect(-12, -190, 34, 24);
+  context.fillStyle = "#1f6f5d";
+  context.fillRect(-49, -119, 96, 14);
+  context.fillRect(-29, -150, 55, 33);
+  context.fillRect(-18, -169, 39, 23);
+  context.fillRect(-7, -187, 27, 21);
+  context.fillStyle = "#dcb64f";
+  context.fillRect(1, -128, 13, 13);
+  context.fillStyle = "#1a160e";
+  context.fillRect(5, -124, 6, 6);
+  context.fillStyle = "#f2d864";
+  context.fillRect(-19, -158, 7, 7);
+  context.fillRect(12, -177, 6, 6);
+
+  context.fillStyle = "#f2b06f";
+  context.fillRect(-22, -104, 45, 32);
+  context.fillStyle = "#ffd3a0";
+  context.fillRect(-13, -103, 28, 28);
+  context.fillStyle = "#0b1110";
+  context.fillRect(-13, -93, 6, 9);
+  context.fillRect(9, -93, 6, 9);
+  context.fillStyle = "#ffffff";
+  context.fillRect(-16, -98, 9, 4);
+  context.fillRect(8, -98, 9, 4);
+
+  context.fillStyle = "#fff6d8";
+  context.fillRect(-28, -73, 58, 14);
+  context.fillRect(-24, -59, 50, 15);
+  context.fillRect(-19, -44, 40, 16);
+  context.fillRect(-12, -28, 26, 15);
+  context.fillStyle = "#ddd0b4";
+  context.fillRect(11, -58, 13, 18);
+  context.fillRect(3, -41, 12, 18);
+
+  context.fillStyle = "#164b3e";
+  context.fillRect(-62, -69, 28, 46);
+  context.fillRect(34, -68, 28, 45);
+  context.fillStyle = "#2a8568";
+  context.fillRect(-58, -63, 16, 32);
+  context.fillRect(38, -62, 16, 30);
+  context.fillStyle = "#dcb64f";
+  context.fillRect(-49, -44, 7, 7);
+  context.fillRect(45, -47, 7, 7);
+
+  context.restore();
+}
+
+function drawWizardTipBubble(context, x, y, width, height, text, showCursor) {
+  context.save();
+  context.fillStyle = "rgba(3, 18, 10, 0.9)";
+  context.strokeStyle = "rgba(156, 255, 156, 0.74)";
+  context.shadowColor = "rgba(80, 255, 130, 0.36)";
+  context.shadowBlur = 13;
+  context.lineWidth = 2;
+  context.fillRect(x, y, width, height);
+  context.strokeRect(x, y, width, height);
+
+  context.beginPath();
+  context.moveTo(x, y + height - 24);
+  context.lineTo(x - 20, y + height - 10);
+  context.lineTo(x, y + height - 5);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffffff";
+  context.font = `bold ${Math.max(10, Math.min(13, window.innerHeight * 0.034))}px 'Courier New', monospace`;
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  const lines = wrapCanvasText(context, text, width - 24);
+  const lineHeight = Math.max(14, Math.min(17, window.innerHeight * 0.042));
+
+  lines.slice(0, 5).forEach((line, index) => {
+    context.fillText(line, x + 12, y + 12 + index * lineHeight);
+  });
+
+  if (showCursor) {
+    const cursorLine = Math.min(lines.length - 1, 4);
+    const cursorText = lines[cursorLine] || "";
+    const cursorX = x + 12 + context.measureText(cursorText).width + 3;
+    const cursorY = y + 12 + cursorLine * lineHeight + 2;
+    context.fillStyle = Math.floor(performance.now() / 180) % 2 ? "#ffffff" : "rgba(255, 255, 255, 0.25)";
+    context.fillRect(cursorX, cursorY, 7, lineHeight - 4);
+  }
+
+  context.restore();
+}
+
+function wrapCanvasText(context, text, maxWidth) {
+  const words = text.split(" ");
+  const lines = [];
+  let line = "";
+
+  words.forEach((word) => {
+    const testLine = line ? `${line} ${word}` : word;
+
+    if (context.measureText(testLine).width <= maxWidth || !line) {
+      line = testLine;
+      return;
+    }
+
+    lines.push(line);
+    line = word;
+  });
+
+  if (line) {
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+function drawFailedGameplayFade(context, gameplayOpacity) {
+  if (miniGameState.status !== "failed" || gameplayOpacity >= 1) {
+    return;
+  }
+
+  context.save();
+  context.globalAlpha = 1 - gameplayOpacity;
+  context.fillStyle = "#000000";
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  context.restore();
 }
 
 function getMiniGameGameplayOpacity() {
+  if (miniGameState.status === "failed") {
+    const age = performance.now() - (miniGameState.failedAt || performance.now());
+
+    if (age < 1000) {
+      return 1;
+    }
+
+    return Math.max(0, 1 - (age - 1000) / 900);
+  }
+
   if (miniGameState.status !== "playing") {
     return 1;
   }
@@ -3286,9 +4612,7 @@ function drawMiniGameHud(context) {
   context.shadowBlur = 10;
 
   if (miniGameState.status === "failed") {
-    context.font = "32px 'Courier New', monospace";
-    context.fillStyle = "#ff4040";
-    context.fillText("FAILED", window.innerWidth / 2, window.innerHeight / 2 - 18);
+    drawFailedMiniGameOverlay(context);
     context.restore();
     return;
   }
@@ -3314,6 +4638,87 @@ function drawMiniGameHud(context) {
   context.fillText(`${remainingSeconds}`, window.innerWidth / 2, boxY + 7);
   context.globalAlpha = Math.min(context.globalAlpha, getMiniGameGameplayOpacity());
   drawMiniGameProgressHud(context);
+  context.restore();
+}
+
+function drawFailedMiniGameOverlay(context) {
+  const age = performance.now() - (miniGameState.failedAt || performance.now());
+  const failedOpacity = Math.min(age / 360, 1);
+  const buttonsOpacity = Math.min(Math.max((age - 2900) / 320, 0), 1);
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2 - 30;
+  const failedSize = Math.max(36, Math.min(58, window.innerHeight * 0.16));
+
+  context.save();
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.shadowColor = "rgba(255, 64, 64, 0.7)";
+  context.shadowBlur = 18;
+  context.globalAlpha = failedOpacity;
+  context.font = `900 ${failedSize}px 'Courier New', monospace`;
+  context.fillStyle = "#ff3030";
+  context.fillText("Failed", centerX, centerY);
+
+  if (buttonsOpacity > 0) {
+    const buttonWidth = Math.min(132, window.innerWidth * 0.24);
+    const buttonHeight = 34;
+    const gap = 14;
+    const y = centerY + failedSize * 0.82;
+    const canSkip = miniGameState.failedRetryCount >= 1;
+    const retry = {
+      x: centerX - buttonWidth - gap / 2,
+      y: y - buttonHeight / 2,
+      width: buttonWidth,
+      height: buttonHeight,
+    };
+    const skip = {
+      x: centerX + gap / 2,
+      y: y - buttonHeight / 2,
+      width: buttonWidth,
+      height: buttonHeight,
+      disabled: !canSkip,
+    };
+
+    miniGameState.failedButtons = { retry, skip };
+    context.globalAlpha = buttonsOpacity;
+    drawFailedButton(context, retry, "Retry");
+    drawFailedButton(context, skip, "Skip level", canSkip ? "" : "1/2");
+  } else {
+    miniGameState.failedButtons = null;
+  }
+
+  context.restore();
+}
+
+function drawFailedButton(context, rect, label, badge = "") {
+  context.save();
+  context.fillStyle = rect.disabled ? "rgba(18, 18, 18, 0.78)" : "rgba(4, 18, 8, 0.86)";
+  context.strokeStyle = rect.disabled ? "rgba(140, 140, 140, 0.55)" : "rgba(255, 255, 255, 0.88)";
+  context.lineWidth = 2;
+  context.fillRect(rect.x, rect.y, rect.width, rect.height);
+  context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  context.fillStyle = rect.disabled ? "rgba(255, 255, 255, 0.48)" : "#ffffff";
+  context.font = `bold ${Math.max(9, Math.min(12, rect.width / 10))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.shadowBlur = 0;
+  context.fillText(label, rect.x + rect.width / 2 - (badge ? 9 : 0), rect.y + rect.height / 2 + 1);
+
+  if (badge) {
+    const badgeWidth = 26;
+    const badgeHeight = 16;
+    const badgeX = rect.x + rect.width - badgeWidth - 7;
+    const badgeY = rect.y + rect.height / 2 - badgeHeight / 2;
+
+    context.fillStyle = "rgba(255, 255, 255, 0.1)";
+    context.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    context.fillRect(badgeX, badgeY, badgeWidth, badgeHeight);
+    context.strokeRect(badgeX, badgeY, badgeWidth, badgeHeight);
+    context.fillStyle = "rgba(255, 255, 255, 0.62)";
+    context.font = "bold 9px 'Courier New', monospace";
+    context.fillText(badge, badgeX + badgeWidth / 2, badgeY + badgeHeight / 2 + 1);
+  }
+
   context.restore();
 }
 
@@ -4141,30 +5546,63 @@ function drawHelperFairies(context) {
 
 function drawTikiMen(context) {
   miniGameState.tikiMen.forEach((tiki) => {
-    const step = tiki.size / 4;
-    const run = Math.sin(tiki.phase) * 3;
+    const unit = tiki.size / 5;
+    const run = Math.sin(tiki.phase) * 2.8;
+    const legSwing = Math.sin(tiki.phase) * unit * 0.75;
 
     context.save();
     context.translate(tiki.x, tiki.y + run);
     context.rotate(tiki.angle || 0);
     context.shadowColor = "rgba(255, 214, 74, 0.45)";
     context.shadowBlur = 8;
-    context.fillStyle = "#8a4d26";
-    context.fillRect(-step * 1.2, -step * 1.8, step * 2.4, step * 3.2);
-    context.fillStyle = "#c47a32";
-    context.fillRect(-step * 1.6, -step * 2.4, step * 3.2, step * 1.4);
-    context.fillStyle = "#111111";
-    context.fillRect(-step, -step * 2, step * 0.6, step * 0.45);
-    context.fillRect(step * 0.4, -step * 2, step * 0.6, step * 0.45);
-    context.fillStyle = "#ffd64a";
-    context.fillRect(-step * 0.7, -step * 1.45, step * 1.4, step * 0.35);
+
     context.strokeStyle = "#d8b67a";
     context.lineWidth = 2;
     context.beginPath();
-    context.moveTo(step * 1.4, 0);
-    context.lineTo(step * 3.6, -step * 1.6);
+    context.moveTo(unit * 1.4, -unit * 0.4);
+    context.lineTo(unit * 5.1, -unit * 2.6);
     context.stroke();
-    drawSmallHealthBar(context, 0, -step * 3.2, 28, tiki.health / tiki.maxHealth, "#ffd64a");
+    context.fillStyle = "#f1ead0";
+    context.beginPath();
+    context.moveTo(unit * 5.1, -unit * 2.6);
+    context.lineTo(unit * 6.1, -unit * 2.35);
+    context.lineTo(unit * 5.3, -unit * 1.72);
+    context.closePath();
+    context.fill();
+
+    context.strokeStyle = "#5c321a";
+    context.lineWidth = Math.max(1.5, unit * 0.35);
+    context.beginPath();
+    context.moveTo(-unit * 0.8, unit * 1.2);
+    context.lineTo(-unit * 1.4, unit * 2.5 + legSwing);
+    context.moveTo(unit * 0.8, unit * 1.2);
+    context.lineTo(unit * 1.4, unit * 2.5 - legSwing);
+    context.moveTo(-unit * 1.3, -unit * 0.2);
+    context.lineTo(-unit * 2.5, unit * 0.9);
+    context.moveTo(unit * 1.3, -unit * 0.2);
+    context.lineTo(unit * 2.2, -unit * 1.1);
+    context.stroke();
+
+    context.fillStyle = "#7a421f";
+    context.fillRect(-unit * 0.8, -unit * 0.8, unit * 1.6, unit * 2.2);
+
+    context.fillStyle = "#9a5529";
+    context.fillRect(-unit * 1.7, -unit * 3.2, unit * 3.4, unit * 2.3);
+    context.fillStyle = "#c47a32";
+    context.fillRect(-unit * 1.45, -unit * 2.9, unit * 2.9, unit * 0.45);
+    context.fillRect(-unit * 1.45, -unit * 1.25, unit * 2.9, unit * 0.38);
+    context.fillStyle = "#ffd64a";
+    context.fillRect(-unit * 1.1, -unit * 2.22, unit * 0.62, unit * 0.55);
+    context.fillRect(unit * 0.48, -unit * 2.22, unit * 0.62, unit * 0.55);
+    context.fillStyle = "#111111";
+    context.fillRect(-unit * 0.62, -unit * 1.6, unit * 1.24, unit * 0.35);
+    context.fillStyle = "#ffffff";
+    context.fillRect(-unit * 0.88, -unit * 0.72, unit * 0.44, unit * 0.38);
+    context.fillRect(0, -unit * 0.72, unit * 0.44, unit * 0.38);
+    context.strokeStyle = "#2b170d";
+    context.lineWidth = 1;
+    context.strokeRect(-unit * 1.7, -unit * 3.2, unit * 3.4, unit * 2.3);
+    drawSmallHealthBar(context, 0, -unit * 4.1, 28, tiki.health / tiki.maxHealth, "#ffd64a");
     context.restore();
   });
 }
@@ -4470,11 +5908,29 @@ function drawSmokeDeaths(context) {
     }
 
     const inhale = Math.min(age / 650, 1);
-    const puff = Math.max(0, Math.min((age - 650) / 550, 1));
+    const puff = Math.max(0, Math.min((age - 650) / 1000, 1));
+    const isFlying = age > 650;
     const step = Math.max(3, death.size / 5) * (1 + inhale * 0.28);
+
+    death.smokePuffs.forEach((smokePuff) => {
+      const puffAge = performance.now() - smokePuff.startedAt;
+      const progress = Math.min(puffAge / 850, 1);
+
+      context.save();
+      context.globalAlpha = Math.max(0, 1 - progress);
+      context.strokeStyle = `rgba(156, 255, 156, ${0.62 - progress * 0.42})`;
+      context.lineWidth = 2;
+      context.beginPath();
+      context.arc(smokePuff.x, smokePuff.y - progress * 18, smokePuff.size + progress * 10, 0, Math.PI * 2);
+      context.stroke();
+      context.restore();
+    });
 
     context.save();
     context.translate(death.x, death.y);
+    if (isFlying) {
+      context.rotate(Math.sin(age / 70 + death.phase) * 0.7);
+    }
     context.shadowColor = "rgba(156, 255, 156, 0.6)";
     context.shadowBlur = 14;
     context.fillStyle = "#9cff9c";
@@ -4707,6 +6163,9 @@ async function prepareLoadingScene() {
   const terminalPanel = document.querySelector(".terminal-panel");
   const rotateMessage = document.querySelector("#rotate-phone-message");
   const transmissionMessage = document.querySelector("#transmission-message");
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingDialogue = document.querySelector("#opening-dialogue");
+  const openingDialogueText = document.querySelector("#opening-dialogue-text");
   const wizardHologram = document.querySelector("#wizard-hologram");
   const wizardSpeech = document.querySelector("#wizard-speech");
   const wizardQuestion = document.querySelector("#wizard-question");
@@ -4717,6 +6176,9 @@ async function prepareLoadingScene() {
     !terminalPanel ||
     !rotateMessage ||
     !transmissionMessage ||
+    !openingWizard ||
+    !openingDialogue ||
+    !openingDialogueText ||
     !wizardHologram ||
     !wizardSpeech ||
     !wizardQuestion ||
@@ -4729,12 +6191,30 @@ async function prepareLoadingScene() {
   hideElement(terminalPanel);
   hideElement(rotateMessage);
   hideElement(transmissionMessage);
+  hideElement(openingWizard);
+  hideElement(openingDialogue);
   hideElement(wizardHologram);
   hideElement(wizardSpeech);
   hideElement(wizardQuestion);
   hideElement(miniGameIntro);
   hideElement(miniGameCanvas);
   wizardHologram.classList.remove("is-visible");
+  openingWizard.classList.remove("is-active");
+  openingWizard.classList.remove("is-path-running");
+  openingWizard.classList.remove("is-mountain-exploding");
+  openingWizard.classList.remove("is-travel-hud-active");
+  stopOpeningTapBubbleGame();
+  stopOpeningMountainExplosionLoop();
+  loadingState.travelHudStarted = false;
+  loadingState.travelHudStartedAt = 0;
+  loadingState.travelDialogueStarted = false;
+  loadingState.travelDialogueRunId += 1;
+  loadingState.pathChallengeActive = false;
+  loadingState.pathChallengeFailed = false;
+  loadingState.pathFailRestartCount = 0;
+  loadingState.tapBubbleTutorialSeen = false;
+  openingDialogue.classList.remove("is-visible");
+  openingDialogueText.textContent = "";
   wizardSpeech.classList.remove("is-visible");
   wizardQuestion.classList.remove("is-fading");
   terminalPanel.classList.remove("is-visible");
@@ -4769,6 +6249,14 @@ async function prepareLoadingScene() {
     }
 
     loadingState.sequenceStarted = true;
+
+    if (TEST_START_AT_TRANSMISSION) {
+      loadingState.activeSurface = "transmission";
+      hideLoadingSurfaces();
+      showActiveSurface();
+      await playTransmissionBlinkSequence();
+      return;
+    }
 
     if (TEST_START_AT_MINI_GAME_INTRO) {
       await playMiniGameIntroSequence();

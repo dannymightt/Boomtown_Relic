@@ -41,6 +41,35 @@
 
         <p id="transmission-message" class="transmission-message" hidden>TRANSMISSION INCOMING</p>
 
+        <div id="opening-wizard" class="opening-wizard" hidden aria-hidden="true">
+          <div id="opening-forest" class="opening-forest"></div>
+          <div id="opening-dialogue" class="opening-dialogue" hidden>
+            <span id="opening-dialogue-text"></span><span class="loading-cursor" aria-hidden="true"></span>
+          </div>
+          <div id="opening-tap-bubble" class="opening-tap-bubble" hidden>
+            <span class="opening-tap-bubble__ring" aria-hidden="true"></span>
+            <button type="button" class="opening-tap-bubble__button">tap</button>
+          </div>
+          <div id="opening-tap-bubble-alt" class="opening-tap-bubble" hidden>
+            <span class="opening-tap-bubble__ring" aria-hidden="true"></span>
+            <button type="button" class="opening-tap-bubble__button">tap</button>
+          </div>
+          <div id="opening-tap-bubble-third" class="opening-tap-bubble" hidden>
+            <span class="opening-tap-bubble__ring" aria-hidden="true"></span>
+            <button type="button" class="opening-tap-bubble__button">tap</button>
+          </div>
+          <div id="opening-tap-tutorial" class="opening-tap-tutorial" hidden>
+            <div class="opening-tap-tutorial__arrow" aria-hidden="true"></div>
+            <div class="opening-tap-tutorial__copy">
+              <p>Pop the bubble when the outer ring reaches the bubble's circumference</p>
+              <span>Press anywhere to continue</span>
+            </div>
+          </div>
+          <div class="opening-wizard__runner"></div>
+          <div class="opening-wizard__idle"></div>
+          <div class="opening-wizard__path-runner"></div>
+        </div>
+
         <img
           id="wizard-hologram"
           class="wizard-hologram"
@@ -62,8 +91,8 @@
           <div class="fantasy-floater fantasy-floater--hat" aria-hidden="true"></div>
           <div class="fantasy-floater fantasy-floater--leaf-charm" aria-hidden="true"></div>
           <div class="fantasy-floater fantasy-floater--smoke-stick" aria-hidden="true"></div>
-          <div class="arcade-logo" aria-label="Ganja Goblins">
-            <span class="arcade-logo__line">Ganja</span>
+          <div class="arcade-logo" aria-label="Gang Goblins">
+            <span class="arcade-logo__line">Gang</span>
             <span class="arcade-logo__leaf" aria-hidden="true"></span>
             <span class="arcade-logo__line arcade-logo__line--bottom">Goblins</span>
           </div>
@@ -73,7 +102,7 @@
         <canvas
           id="mini-game-canvas"
           class="mini-game-canvas"
-          aria-label="Ganj Goblins shooting game"
+          aria-label="Gang Goblins shooting game"
           hidden
         ></canvas>
       </section>
