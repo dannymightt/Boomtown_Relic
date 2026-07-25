@@ -65,6 +65,10 @@ const OPENING_WIZARD_RESTART_DIALOGUE = [
 ];
 const TYPING_SOUND_URL = "assets/code-typing-soundfx.wav";
 const RETRO_FX_SOUND_URL = "assets/retro-fx-2.mp3";
+const PHONE_RING_SOUND_URL = "assets/phone-ring-sfx.wav";
+const PHONE_PICKUP_SOUND_URL = "assets/phone-pickup-sfx.wav";
+const RETRO_PHONE_IMAGE_URL = "assets/retro-phone.png";
+const JOHN_CHARACTER_IMAGE_URL = "assets/redneck-scruff-character.png";
 const RETRO_FX_SPRITES = {
   menuStart: { start: 0.05, duration: 0.28, volume: 0.9 },
   shoot: { start: 0.42, duration: 0.16, volume: 0.78 },
@@ -92,6 +96,18 @@ const MINI_GAME_GOLDEN_APPLE_RADIUS = 120;
 const MINI_GAME_GOLDEN_APPLE_START_MS = 30000;
 const MINI_GAME_FAIL_RESTART_MS = 1000;
 const MINI_GAME_FINISH_EFFECT_MS = 2200;
+const MINI_GAME_VICTORY_HOLD_MS = 1700;
+const MINI_GAME_VICTORY_FADE_MS = 1200;
+const POST_GAME_PHONE_TRANSITION_MS = 800;
+const POST_GAME_PHONE_FADE_MS = 900;
+const POST_GAME_PHONE_RING_INTERVAL_MS = 3600;
+const POST_GAME_PHONE_RING_DURATION_MS = 1700;
+const POST_GAME_PHONE_PICKUP_FADE_MS = 900;
+const PHONE_DIALOGUE_LINE_DRAW_MS = 360;
+const PHONE_DIALOGUE_TYPE_SPEED_MS = 22;
+const PHONE_DIALOGUE_HOLD_MS = 1900;
+const PHONE_CHALLENGE_PROMPT_FADE_MS = 360;
+const PHONE_CHALLENGE_ACCEPT_FADE_MS = 850;
 const MINI_GAME_BIG_GOBLIN_START_MS = 15000;
 const MINI_GAME_LEVEL_REQUIREMENTS = [0, 2, 3, 4, 5];
 const MINI_GAME_BOSS_HEALTH = 80;
@@ -115,12 +131,34 @@ const MINI_GAME_INTRO_FADE_MS = 700;
 const MINI_GAME_INSTRUCTION_SEQUENCE_MS = 11800;
 const MINI_GAME_WIZARD_TIP_TEXT =
   "alright g, you got this all you gotta do is shoot the apples to upgrade your mushrooms and kill the goblins, i believe in you";
+const MINI_GAME_WIZARD_SPRITE_URL = "assets/cute-wizard-design-wave-staff-aligned.png";
 const MINI_GAME_WIZARD_TIP_DELAY_MS = 650;
 const MINI_GAME_WIZARD_TIP_TYPE_SPEED_MS = 17;
-const MINI_GAME_WIZARD_TIP_HOLD_MS = 1450;
+const MINI_GAME_WIZARD_TIP_HOLD_MS = 3200;
 const MINI_GAME_WIZARD_TIP_EXIT_MS = 760;
-const TEST_START_AT_TRANSMISSION = true;
+const TEST_START_AT_TRANSMISSION = false;
 const TEST_START_AT_MINI_GAME_INTRO = false;
+const TEST_START_AT_SKIP_LEVEL_FAIL = false;
+
+const PHONE_DIALOGUE_LINES = [
+  { speaker: "wizard", text: "hello?" },
+  { speaker: "john", text: "ayyyy retro wiz my guy how you beeeen" },
+  { speaker: "wizard", text: "omg no way is that scatty john?" },
+  { speaker: "john", text: "in the flesh g" },
+  { speaker: "wizard", text: "no wayyy bro, i haven't seen you since..." },
+  {
+    speaker: "john",
+    text: "oh yes my friend, ive returned to the homegrounds for.. another... ultimate scatty style boomtown.",
+  },
+  { speaker: "wizard", text: "oh yes its a messy one already i love it. im on my way there now" },
+  {
+    speaker: "john",
+    text: "thats the reason i was calling mate, saw this nitty gang of goblins and could recognise my boys stash from a mile away.",
+  },
+  { speaker: "john", text: "they're being dickheads around hydro rn" },
+  { speaker: "wizard", text: "fuck man, im on my way but still so far to go" },
+  { speaker: "john", text: "you and your guy yeah beat me at this game and ill give you a fat speed boost" },
+];
 
 // Edit this array to change the opening terminal sequence.
 const LOADING_MESSAGES = [
@@ -218,6 +256,9 @@ const audioState = {
   typingBuffer: null,
   retroFxBuffer: null,
   retroFxLoadPromise: null,
+  phoneRingBuffer: null,
+  phonePickupBuffer: null,
+  phoneSoundLoadPromises: {},
   typingSource: null,
   isTypingSoundActive: false,
   resumePromise: null,
@@ -275,9 +316,25 @@ const miniGameState = {
   gameplayFadeStartedAt: 0,
   wizardTipStartedAt: 0,
   wizardTipTypingActive: false,
+  wizardTipImage: null,
   shakeUntil: 0,
   shakeIntensity: 0,
   finishEffect: null,
+  victoryStartedAt: 0,
+  phoneTransitionStartedAt: 0,
+  phoneStartedAt: 0,
+  phoneRingStartedAt: 0,
+  phoneAnsweredAt: 0,
+  phoneRect: null,
+  phoneImage: null,
+  phoneDialogueStartedAt: 0,
+  phoneDialogueLineIndex: 0,
+  phoneDialogueLineStartedAt: 0,
+  phoneDialogueTypingActive: false,
+  phoneChallengePromptAt: 0,
+  phoneChallengeAcceptedAt: 0,
+  phoneChallengeButton: null,
+  johnImage: null,
   failedAt: 0,
   failedButtons: null,
   failedRetryCount: 0,
@@ -396,6 +453,7 @@ function unlockGameAudio() {
   }
 
   loadRetroFxSound();
+  loadPhoneSounds();
   return audioState.resumePromise;
 }
 
@@ -419,6 +477,64 @@ function loadRetroFxSound() {
     });
 
   return audioState.retroFxLoadPromise;
+}
+
+function loadDecodedSound(key, url) {
+  const context = ensureAudioContext();
+
+  if (!context) {
+    return Promise.resolve(null);
+  }
+
+  if (audioState[key]) {
+    return Promise.resolve(audioState[key]);
+  }
+
+  if (audioState.phoneSoundLoadPromises[key]) {
+    return audioState.phoneSoundLoadPromises[key];
+  }
+
+  audioState.phoneSoundLoadPromises[key] = fetch(url)
+    .then((response) => response.arrayBuffer())
+    .then((audioData) => context.decodeAudioData(audioData))
+    .then((buffer) => {
+      audioState[key] = buffer;
+      return buffer;
+    })
+    .catch(() => {
+      audioState.phoneSoundLoadPromises[key] = null;
+      return null;
+    });
+
+  return audioState.phoneSoundLoadPromises[key];
+}
+
+function loadPhoneSounds() {
+  loadDecodedSound("phoneRingBuffer", PHONE_RING_SOUND_URL);
+  loadDecodedSound("phonePickupBuffer", PHONE_PICKUP_SOUND_URL);
+}
+
+function playDecodedSound(bufferKey, options = {}) {
+  const context = audioState.context;
+  const buffer = audioState[bufferKey];
+
+  if (!context || !audioState.sfxGain || !buffer || context.state !== "running") {
+    return false;
+  }
+
+  const source = context.createBufferSource();
+  const gain = context.createGain();
+  const startAt = context.currentTime + 0.001;
+  const volume = options.volume ?? 0.82;
+
+  source.buffer = buffer;
+  gain.gain.setValueAtTime(volume, startAt);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + buffer.duration + 0.08);
+  source.connect(gain);
+  gain.connect(audioState.sfxGain);
+  source.start(startAt);
+
+  return true;
 }
 
 // Web Audio is created from the answer tap so mobile browsers allow sound.
@@ -458,6 +574,7 @@ function startTypingSound() {
 
   audioState.typingSource = source;
   audioState.isTypingSoundActive = true;
+  return true;
 }
 
 function stopTypingSound() {
@@ -725,6 +842,30 @@ function playSoundEffect(name, options = {}) {
       [392, 523, 659, 784, 1046, 1318].forEach((frequency, index) => {
         playTone({ frequency, endFrequency: frequency * 1.05, duration: 0.2, type: "triangle", volume: 0.1, when: 0.18 + index * 0.085 });
       });
+      break;
+    case "phoneRing":
+      loadDecodedSound("phoneRingBuffer", PHONE_RING_SOUND_URL);
+      if (playDecodedSound("phoneRingBuffer", { volume: 1.35 })) {
+        break;
+      }
+
+      [0, 0.42].forEach((when) => {
+        playTone({ frequency: 880, endFrequency: 760, duration: 0.22, type: "triangle", volume: 0.13, when });
+        playTone({ frequency: 440, endFrequency: 380, duration: 0.24, type: "sine", volume: 0.09, when });
+      });
+      [0.86, 1.14].forEach((when) => {
+        playTone({ frequency: 980, endFrequency: 820, duration: 0.16, type: "triangle", volume: 0.08, when });
+      });
+      break;
+    case "phonePickup":
+      loadDecodedSound("phonePickupBuffer", PHONE_PICKUP_SOUND_URL);
+      if (playDecodedSound("phonePickupBuffer", { volume: 0.9 })) {
+        break;
+      }
+
+      playTone({ frequency: 580, endFrequency: 220, duration: 0.16, type: "triangle", volume: 0.1 });
+      playTone({ frequency: 260, endFrequency: 520, duration: 0.14, type: "sine", volume: 0.07, when: 0.08 });
+      playNoise({ duration: 0.12, volume: 0.025, lowpass: 1800, when: 0.02 });
       break;
     case "timeWarp":
       playTone({ frequency: 520, endFrequency: 58, duration: 0.9, type: "sine", volume: 0.11 });
@@ -1238,19 +1379,25 @@ function getOpeningActiveBubblePositions(bubbles) {
 function createOpeningBubblePosition(bubbleSide, dialogueVisible, bubbles) {
   const activePositions = getOpeningActiveBubblePositions(bubbles);
   const minDistance = 18;
+  const minX = 14;
+  const maxX = 86;
+  const minY = 20;
+  const maxY = 78;
   let fallbackPosition = null;
 
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const candidate = {
       x:
         bubbleSide === "is-left"
-          ? 10 + Math.random() * 28
+          ? 16 + Math.random() * 24
           : dialogueVisible
-            ? 82 + Math.random() * 6
-            : 61 + Math.random() * 29,
-      y: dialogueVisible ? 48 + Math.random() * 14 : 25 + Math.random() * 38,
+            ? 72 + Math.random() * 10
+            : 60 + Math.random() * 24,
+      y: dialogueVisible ? 50 + Math.random() * 12 : 24 + Math.random() * 42,
     };
 
+    candidate.x = Math.max(minX, Math.min(maxX, candidate.x));
+    candidate.y = Math.max(minY, Math.min(maxY, candidate.y));
     fallbackPosition = candidate;
 
     const hasEnoughRoom = activePositions.every((position) => {
@@ -1369,7 +1516,17 @@ function showOpeningTapBubble() {
     }, 560);
   };
 
+  const handleBubblePointer = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    handleTap();
+  };
+
+  bubble.onpointerdown = handleBubblePointer;
   button.onclick = handleTap;
+  button.onpointerdown = handleBubblePointer;
+  bubble.ontouchstart = handleBubblePointer;
+  button.ontouchstart = handleBubblePointer;
 
   void bubble.offsetWidth;
 
@@ -2001,7 +2158,7 @@ async function playOpeningWizardSequence() {
   await waitWhileLandscape(240);
   hideElement(openingDialogue);
   openingWizard.classList.add("is-path-running");
-  scheduleOpeningTravelHudSequence(OPENING_TRAVEL_HUD_AFTER_TUTORIAL_MS);
+  scheduleOpeningTapBubble(OPENING_TAP_BUBBLE_DELAY_MS);
   scheduleOpeningMountainExplosionLoop();
 }
 
@@ -2125,6 +2282,7 @@ function startMiniGamePrelude() {
   miniGameState.preludeTimerGlitchSoundPlayed = false;
   miniGameState.preludeObstacles = createForestObstacles();
   miniGameState.lake = createMiniGameLake(miniGameState.preludeObstacles);
+  loadMiniGameWizardSprite();
   loadingState.activeSurface = "miniGame";
   showActiveSurface();
   resizeMiniGameCanvas();
@@ -2208,6 +2366,19 @@ function startMiniGame() {
   miniGameState.status = "playing";
   miniGameState.failedAt = 0;
   miniGameState.failedButtons = null;
+  miniGameState.victoryStartedAt = 0;
+  miniGameState.phoneTransitionStartedAt = 0;
+  miniGameState.phoneStartedAt = 0;
+  miniGameState.phoneRingStartedAt = 0;
+  miniGameState.phoneAnsweredAt = 0;
+  miniGameState.phoneRect = null;
+  miniGameState.phoneDialogueStartedAt = 0;
+  miniGameState.phoneDialogueLineIndex = 0;
+  miniGameState.phoneDialogueLineStartedAt = 0;
+  miniGameState.phoneDialogueTypingActive = false;
+  miniGameState.phoneChallengePromptAt = 0;
+  miniGameState.phoneChallengeAcceptedAt = 0;
+  miniGameState.phoneChallengeButton = null;
   miniGameState.bossSpawned = false;
   miniGameState.shakeUntil = 0;
   miniGameState.shakeIntensity = 0;
@@ -2222,6 +2393,55 @@ function startMiniGame() {
   showActiveSurface();
   resizeMiniGameCanvas();
   unlockTypingAudio().catch(() => {});
+  loadMiniGameWizardSprite();
+
+  canvas.addEventListener("pointerdown", handleMiniGamePress);
+  canvas.addEventListener("pointermove", handleMiniGameAim);
+  miniGameState.animationFrame = window.requestAnimationFrame(updateMiniGame);
+}
+
+function startMiniGameAtLockedSkipFail() {
+  const canvas = document.querySelector("#mini-game-canvas");
+
+  if (!canvas) {
+    return;
+  }
+
+  if (miniGameState.animationFrame) {
+    window.cancelAnimationFrame(miniGameState.animationFrame);
+  }
+
+  canvas.removeEventListener("pointerdown", handleMiniGamePress);
+  canvas.removeEventListener("pointermove", handleMiniGameAim);
+
+  miniGameState.canvas = canvas;
+  miniGameState.context = canvas.getContext("2d");
+  miniGameState.bullets = [];
+  miniGameState.goblins = [];
+  miniGameState.explosions = [];
+  miniGameState.apples = [];
+  miniGameState.fairyBombs = [];
+  miniGameState.levelMessages = [];
+  miniGameState.hitMarkers = [];
+  miniGameState.obstacles = [];
+  miniGameState.lake = null;
+  miniGameState.status = "failed";
+  miniGameState.failedAt = performance.now() - 3200;
+  miniGameState.failedRetryCount = 1;
+  miniGameState.failedButtons = null;
+  miniGameState.phoneTransitionStartedAt = 0;
+  miniGameState.phoneStartedAt = 0;
+  miniGameState.phoneRingStartedAt = 0;
+  miniGameState.phoneAnsweredAt = 0;
+  miniGameState.startedAt = performance.now();
+  miniGameState.lastFrameTime = performance.now();
+  miniGameState.isRunning = true;
+  loadingState.activeSurface = "miniGame";
+  showActiveSurface();
+  resizeMiniGameCanvas();
+  unlockGameAudio();
+  loadPhoneSounds();
+  loadRetroPhoneImage();
 
   canvas.addEventListener("pointerdown", handleMiniGamePress);
   canvas.addEventListener("pointermove", handleMiniGameAim);
@@ -2558,6 +2778,16 @@ function handleMiniGamePress(event) {
     return;
   }
 
+  if (miniGameState.status === "phone") {
+    handlePostGamePhonePress(pressPoint);
+    return;
+  }
+
+  if (miniGameState.status === "phoneDialogue") {
+    handlePhoneDialoguePress(pressPoint);
+    return;
+  }
+
   if (miniGameState.status !== "playing") {
     return;
   }
@@ -2592,19 +2822,32 @@ function handleFailedMiniGamePress(point) {
     }
 
     playSoundEffect("menuStart", { minGap: 120 });
-    miniGameState.status = "skipped";
-    miniGameState.isRunning = false;
+    startPostGamePhoneTransition(performance.now());
     miniGameState.failedButtons = null;
-    miniGameState.bullets = [];
-    miniGameState.goblins = [];
-    miniGameState.apples = [];
-    miniGameState.tikiMen = [];
-    miniGameState.lavaSnakes = [];
-    miniGameState.helperFairies = [];
-    if (miniGameState.context) {
-      miniGameState.context.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    }
   }
+}
+
+function handlePostGamePhonePress(point) {
+  if (miniGameState.phoneAnsweredAt || !isPointInsideRect(point, miniGameState.phoneRect)) {
+    return;
+  }
+
+  miniGameState.phoneAnsweredAt = performance.now();
+  playSoundEffect("phonePickup", { minGap: 300 });
+}
+
+function handlePhoneDialoguePress(point) {
+  if (
+    !miniGameState.phoneChallengePromptAt ||
+    miniGameState.phoneChallengeAcceptedAt ||
+    !isPointInsideRect(point, miniGameState.phoneChallengeButton)
+  ) {
+    return;
+  }
+
+  miniGameState.phoneChallengeAcceptedAt = performance.now();
+  miniGameState.phoneChallengeButton = null;
+  playSoundEffect("menuStart", { minGap: 120, volume: 0.72 });
 }
 
 function isPointInsideRect(point, rect) {
@@ -2725,6 +2968,14 @@ function updateMiniGame(timestamp) {
 
   if (loadingState.isLandscape && miniGameState.status === "finishing") {
     updateMiniGameFinish(timestamp, deltaSeconds);
+  } else if (loadingState.isLandscape && miniGameState.status === "victory") {
+    updateMiniGameVictory(timestamp);
+  } else if (loadingState.isLandscape && miniGameState.status === "phoneTransition") {
+    updatePostGamePhoneTransition(timestamp);
+  } else if (loadingState.isLandscape && miniGameState.status === "phone") {
+    updatePostGamePhone(timestamp);
+  } else if (loadingState.isLandscape && miniGameState.status === "phoneDialogue") {
+    updatePhoneDialogue(timestamp);
   } else if (loadingState.isLandscape && miniGameState.status === "playing") {
     updateMiniGameWizardTip(timestamp);
 
@@ -2759,8 +3010,160 @@ function updateMiniGame(timestamp) {
     stopTypingSound();
   }
 
+  if (miniGameState.status !== "phoneDialogue" && miniGameState.phoneDialogueTypingActive) {
+    miniGameState.phoneDialogueTypingActive = false;
+    stopTypingSound();
+  }
+
   drawMiniGame();
   miniGameState.animationFrame = window.requestAnimationFrame(updateMiniGame);
+}
+
+function updateMiniGameVictory(timestamp) {
+  if (
+    miniGameState.victoryStartedAt &&
+    timestamp - miniGameState.victoryStartedAt > MINI_GAME_VICTORY_HOLD_MS + MINI_GAME_VICTORY_FADE_MS
+  ) {
+    startPostGamePhone(timestamp);
+  }
+}
+
+function updatePostGamePhoneTransition(timestamp) {
+  if (
+    miniGameState.phoneTransitionStartedAt &&
+    timestamp - miniGameState.phoneTransitionStartedAt > POST_GAME_PHONE_TRANSITION_MS
+  ) {
+    startPostGamePhone(timestamp);
+  }
+}
+
+function updatePostGamePhone(timestamp) {
+  if (!miniGameState.phoneStartedAt) {
+    miniGameState.phoneStartedAt = timestamp;
+  }
+
+  if (miniGameState.phoneAnsweredAt) {
+    if (timestamp - miniGameState.phoneAnsweredAt > POST_GAME_PHONE_PICKUP_FADE_MS) {
+      startPhoneDialogue(timestamp);
+    }
+
+    return;
+  }
+
+  if (!miniGameState.phoneRingStartedAt || timestamp - miniGameState.phoneRingStartedAt > POST_GAME_PHONE_RING_INTERVAL_MS) {
+    miniGameState.phoneRingStartedAt = timestamp;
+    playSoundEffect("phoneRing", { minGap: 800 });
+  }
+}
+
+function startPhoneDialogue(timestamp) {
+  miniGameState.status = "phoneDialogue";
+  miniGameState.isRunning = true;
+  miniGameState.phoneDialogueStartedAt = timestamp;
+  miniGameState.phoneDialogueLineIndex = 0;
+  miniGameState.phoneDialogueLineStartedAt = timestamp + PHONE_DIALOGUE_LINE_DRAW_MS + 180;
+  miniGameState.phoneDialogueTypingActive = false;
+  miniGameState.phoneChallengePromptAt = 0;
+  miniGameState.phoneChallengeAcceptedAt = 0;
+  miniGameState.phoneChallengeButton = null;
+  loadMiniGameWizardSprite();
+  loadJohnCharacterImage();
+  unlockTypingAudio().catch(() => {});
+}
+
+function updatePhoneDialogue(timestamp) {
+  if (miniGameState.phoneChallengeAcceptedAt) {
+    if (timestamp - miniGameState.phoneChallengeAcceptedAt > PHONE_CHALLENGE_ACCEPT_FADE_MS) {
+      if (miniGameState.context) {
+        miniGameState.context.save();
+        miniGameState.context.setTransform(1, 0, 0, 1, 0, 0);
+        miniGameState.context.fillStyle = "#000000";
+        miniGameState.context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+        miniGameState.context.restore();
+      }
+
+      miniGameState.status = "phoneDone";
+      miniGameState.isRunning = false;
+      miniGameState.phoneChallengeButton = null;
+    }
+
+    return;
+  }
+
+  const line = PHONE_DIALOGUE_LINES[miniGameState.phoneDialogueLineIndex];
+
+  if (!line || timestamp < miniGameState.phoneDialogueLineStartedAt) {
+    return;
+  }
+
+  const lineAge = timestamp - miniGameState.phoneDialogueLineStartedAt;
+  const typeDuration = line.text.length * PHONE_DIALOGUE_TYPE_SPEED_MS;
+  const isTyping = lineAge < typeDuration;
+
+  if (isTyping && !miniGameState.phoneDialogueTypingActive) {
+    miniGameState.phoneDialogueTypingActive = startTypingSound();
+  }
+
+  if (!isTyping && miniGameState.phoneDialogueTypingActive) {
+    miniGameState.phoneDialogueTypingActive = false;
+    stopTypingSound();
+  }
+
+  if (lineAge > typeDuration + PHONE_DIALOGUE_HOLD_MS && miniGameState.phoneDialogueLineIndex < PHONE_DIALOGUE_LINES.length - 1) {
+    miniGameState.phoneDialogueLineIndex += 1;
+    miniGameState.phoneDialogueLineStartedAt = timestamp;
+    return;
+  }
+
+  if (
+    miniGameState.phoneDialogueLineIndex >= PHONE_DIALOGUE_LINES.length - 1 &&
+    !miniGameState.phoneChallengePromptAt &&
+    lineAge > typeDuration + PHONE_DIALOGUE_HOLD_MS
+  ) {
+    miniGameState.phoneChallengePromptAt = timestamp;
+  }
+}
+
+function startPostGamePhoneTransition(timestamp) {
+  miniGameState.status = "phoneTransition";
+  miniGameState.isRunning = true;
+  miniGameState.phoneTransitionStartedAt = timestamp;
+  miniGameState.failedAt = 0;
+  miniGameState.failedButtons = null;
+  miniGameState.bullets = [];
+  miniGameState.goblins = [];
+  miniGameState.apples = [];
+  miniGameState.tikiMen = [];
+  miniGameState.lavaSnakes = [];
+  miniGameState.helperFairies = [];
+  miniGameState.fairyBombs = [];
+  miniGameState.explosions = [];
+  miniGameState.hitMarkers = [];
+}
+
+function startPostGamePhone(timestamp, fromSkip = false) {
+  miniGameState.status = "phone";
+  miniGameState.isRunning = true;
+  miniGameState.phoneTransitionStartedAt = 0;
+  miniGameState.phoneStartedAt = timestamp;
+  miniGameState.phoneRingStartedAt = 0;
+  miniGameState.phoneAnsweredAt = 0;
+  miniGameState.phoneRect = null;
+  miniGameState.finishEffect = null;
+  miniGameState.failedButtons = null;
+  miniGameState.bullets = [];
+  miniGameState.goblins = [];
+  miniGameState.apples = [];
+  miniGameState.tikiMen = [];
+  miniGameState.lavaSnakes = [];
+  miniGameState.helperFairies = [];
+  miniGameState.fairyBombs = [];
+  miniGameState.explosions = [];
+  miniGameState.hitMarkers = [];
+
+  if (fromSkip) {
+    miniGameState.failedAt = 0;
+  }
 }
 
 function updateMiniGameWizardTip(timestamp) {
@@ -2846,6 +3249,7 @@ function updateMiniGameFinish(timestamp, deltaSeconds) {
   miniGameState.bullets = [];
 
   if (effect.kind === "victory") {
+    miniGameState.victoryStartedAt = timestamp;
     miniGameState.goblins = [];
     miniGameState.apples = [];
     return;
@@ -4331,10 +4735,34 @@ function drawMiniGame() {
   drawFailedGameplayFade(context, gameplayOpacity);
   drawMiniGameFinishEffect(context);
   drawMiniGameWizardTipOverlay(context);
+  drawPostGamePhone(context);
+  drawPhoneDialogue(context);
   drawMiniGameHud(context);
   if (miniGameState.status === "playing") {
     drawLevelMessages(context);
   }
+}
+
+function loadMiniGameWizardSprite() {
+  if (miniGameState.wizardTipImage) {
+    return miniGameState.wizardTipImage;
+  }
+
+  const image = new Image();
+  image.src = MINI_GAME_WIZARD_SPRITE_URL;
+  miniGameState.wizardTipImage = image;
+  return image;
+}
+
+function loadJohnCharacterImage() {
+  if (miniGameState.johnImage) {
+    return miniGameState.johnImage;
+  }
+
+  const image = new Image();
+  image.src = JOHN_CHARACTER_IMAGE_URL;
+  miniGameState.johnImage = image;
+  return image;
 }
 
 function drawMiniGameWizardTipOverlay(context) {
@@ -4357,23 +4785,40 @@ function drawMiniGameWizardTipOverlay(context) {
   const easedEnter = 1 - Math.pow(1 - enter, 3);
   const easedExit = exit * exit;
   const opacity = Math.max(0, Math.min(easedEnter, 1 - easedExit));
-  const wizardScale = Math.max(1.15, Math.min(1.55, window.innerHeight / 280));
-  const wizardX = Math.max(34, window.innerWidth * 0.12);
-  const wizardY = window.innerHeight + 8 - easedEnter * 104 + easedExit * 120;
+  const wizardHeight = Math.max(220, Math.min(310, window.innerHeight * 0.82));
+  const wizardWidth = wizardHeight * (543 / 724);
+  const wizardX = Math.max(8, window.innerWidth * 0.035);
+  const wizardY = window.innerHeight - wizardHeight * 0.62 + (1 - easedEnter) * 120 + easedExit * 130;
   const typedCharacters = Math.min(
     MINI_GAME_WIZARD_TIP_TEXT.length,
     Math.max(0, Math.floor(age / MINI_GAME_WIZARD_TIP_TYPE_SPEED_MS))
   );
   const visibleText = MINI_GAME_WIZARD_TIP_TEXT.slice(0, typedCharacters);
-  const bubbleX = Math.min(window.innerWidth - 230, wizardX + 92 * wizardScale);
+  const bubbleX = Math.min(window.innerWidth - 230, wizardX + wizardWidth * 0.78);
   const bubbleY = Math.max(54, window.innerHeight - 162);
   const bubbleWidth = Math.min(360, window.innerWidth - bubbleX - 18);
   const bubbleHeight = Math.max(74, Math.min(106, window.innerHeight * 0.27));
 
   context.save();
   context.globalAlpha = opacity;
-  drawLargeRetroWizardBust(context, wizardX, wizardY, wizardScale, now);
+  drawLargeRetroWizardSprite(context, wizardX, wizardY, wizardWidth, wizardHeight, now);
   drawWizardTipBubble(context, bubbleX, bubbleY, bubbleWidth, bubbleHeight, visibleText, typedCharacters < MINI_GAME_WIZARD_TIP_TEXT.length);
+  context.restore();
+}
+
+function drawLargeRetroWizardSprite(context, x, y, width, height, now) {
+  const image = loadMiniGameWizardSprite();
+  const bob = Math.sin(now / 360) * 2;
+
+  if (!image.complete || image.naturalWidth === 0) {
+    return;
+  }
+
+  context.save();
+  context.shadowColor = "rgba(92, 255, 146, 0.38)";
+  context.shadowBlur = 18;
+  context.imageSmoothingEnabled = false;
+  context.drawImage(image, 0, 0, 543, 724, x, y + bob, width, height);
   context.restore();
 }
 
@@ -4527,6 +4972,20 @@ function drawFailedGameplayFade(context, gameplayOpacity) {
 }
 
 function getMiniGameGameplayOpacity() {
+  if (miniGameState.status === "victory") {
+    const age = performance.now() - (miniGameState.victoryStartedAt || performance.now());
+    return Math.max(0, 1 - age / 1000);
+  }
+
+  if (
+    miniGameState.status === "phoneTransition" ||
+    miniGameState.status === "phone" ||
+    miniGameState.status === "phoneDialogue" ||
+    miniGameState.status === "phoneDone"
+  ) {
+    return 0;
+  }
+
   if (miniGameState.status === "failed") {
     const age = performance.now() - (miniGameState.failedAt || performance.now());
 
@@ -4598,6 +5057,336 @@ function drawMiniGameFinishEffect(context) {
   context.restore();
 }
 
+function drawPostGamePhone(context) {
+  if (miniGameState.status !== "phone") {
+    return;
+  }
+
+  const now = performance.now();
+  const age = now - (miniGameState.phoneStartedAt || now);
+  const answeredAge = miniGameState.phoneAnsweredAt ? now - miniGameState.phoneAnsweredAt : 0;
+  const fadeIn = Math.min(age / POST_GAME_PHONE_FADE_MS, 1);
+  const fadeOut = miniGameState.phoneAnsweredAt ? Math.min(answeredAge / POST_GAME_PHONE_PICKUP_FADE_MS, 1) : 0;
+  const opacity = Math.max(0, fadeIn * (1 - fadeOut));
+  const pickupScale = miniGameState.phoneAnsweredAt ? 1 + fadeOut * 0.22 : 1;
+  const ringAge = miniGameState.phoneRingStartedAt ? now - miniGameState.phoneRingStartedAt : Infinity;
+  const ringShake = getPhoneRingShake(ringAge);
+  const phoneImage = loadRetroPhoneImage();
+  const phoneAspect = phoneImage.complete && phoneImage.naturalWidth > 0 ? phoneImage.naturalWidth / phoneImage.naturalHeight : 1;
+  const phoneWidth = Math.max(150, Math.min(250, window.innerHeight * 0.56));
+  const phoneHeight = phoneWidth / phoneAspect;
+  const phoneX = window.innerWidth / 2;
+  const phoneY = window.innerHeight / 2 - 16;
+  const shakeX = ringShake * Math.sin(now / 28);
+  const shakeY = ringShake * Math.cos(now / 34) * 0.65;
+  const rotation = ringShake * 0.014 * Math.sin(now / 42);
+
+  miniGameState.phoneRect = {
+    x: phoneX - phoneWidth / 2,
+    y: phoneY - phoneHeight / 2,
+    width: phoneWidth,
+    height: phoneHeight,
+  };
+
+  context.save();
+  context.globalAlpha = opacity;
+  context.translate(phoneX + shakeX, phoneY + shakeY);
+  context.scale(pickupScale, pickupScale);
+  context.rotate(rotation);
+  drawRetroPhone(context, phoneWidth, phoneHeight, ringShake);
+  context.restore();
+
+  if (!miniGameState.phoneAnsweredAt) {
+    const textOpacity = opacity * (0.45 + Math.sin(now / 310) * 0.34);
+    context.save();
+    context.globalAlpha = textOpacity;
+    context.font = `bold ${Math.max(12, Math.min(18, window.innerHeight * 0.045))}px 'Courier New', monospace`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = "#ffffff";
+    context.shadowColor = "rgba(255, 255, 255, 0.5)";
+    context.shadowBlur = 10;
+    context.fillText("click to answer the phone", window.innerWidth / 2, phoneY + phoneHeight / 2 + 34);
+    context.restore();
+  }
+}
+
+function drawPhoneDialogue(context) {
+  if (miniGameState.status !== "phoneDialogue") {
+    return;
+  }
+
+  const now = performance.now();
+  const age = now - (miniGameState.phoneDialogueStartedAt || now);
+  const lineProgress = Math.min(age / PHONE_DIALOGUE_LINE_DRAW_MS, 1);
+  const revealProgress = Math.min(Math.max((age - PHONE_DIALOGUE_LINE_DRAW_MS * 0.55) / 520, 0), 1);
+  const centerX = window.innerWidth / 2;
+
+  context.save();
+  context.fillStyle = "#000000";
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  context.restore();
+
+  context.save();
+  context.strokeStyle = "#ffffff";
+  context.shadowColor = "rgba(255, 255, 255, 0.8)";
+  context.shadowBlur = 12;
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(centerX, 0);
+  context.lineTo(centerX, window.innerHeight * lineProgress);
+  context.stroke();
+  context.restore();
+
+  if (revealProgress <= 0) {
+    return;
+  }
+
+  context.save();
+  context.globalAlpha = revealProgress;
+  drawPhoneDialogueCharacters(context);
+  drawPhoneDialogueBubble(context);
+  drawPhoneChallengePrompt(context);
+  context.restore();
+
+  if (miniGameState.phoneChallengeAcceptedAt) {
+    const fadeProgress = Math.min(
+      (now - miniGameState.phoneChallengeAcceptedAt) / PHONE_CHALLENGE_ACCEPT_FADE_MS,
+      1
+    );
+    context.save();
+    context.globalAlpha = fadeProgress;
+    context.fillStyle = "#000000";
+    context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+    context.restore();
+  }
+}
+
+function drawPhoneDialogueCharacters(context) {
+  const wizard = loadMiniGameWizardSprite();
+  const john = loadJohnCharacterImage();
+  const halfWidth = window.innerWidth / 2;
+  const bottomY = window.innerHeight + Math.min(150, window.innerHeight * 0.36);
+  const firstJohnLineIndex = PHONE_DIALOGUE_LINES.findIndex((line) => line.speaker === "john");
+  const johnShouldBeVisible =
+    firstJohnLineIndex >= 0 &&
+    miniGameState.phoneDialogueLineIndex >= firstJohnLineIndex &&
+    performance.now() >= miniGameState.phoneDialogueLineStartedAt;
+
+  if (wizard.complete && wizard.naturalWidth > 0) {
+    const wizardHeight = Math.max(250, Math.min(window.innerHeight * 0.94, 390));
+    const wizardWidth = wizardHeight * (543 / 724);
+    context.save();
+    context.imageSmoothingEnabled = false;
+    context.shadowColor = "rgba(92, 255, 146, 0.4)";
+    context.shadowBlur = 18;
+    context.drawImage(
+      wizard,
+      0,
+      0,
+      543,
+      724,
+      halfWidth * 0.48 - wizardWidth / 2,
+      bottomY - wizardHeight,
+      wizardWidth,
+      wizardHeight
+    );
+    context.restore();
+  }
+
+  if (johnShouldBeVisible && john.complete && john.naturalWidth > 0) {
+    const johnHeight = Math.max(250, Math.min(window.innerHeight * 0.92, 380));
+    const johnWidth = johnHeight * (john.naturalWidth / john.naturalHeight);
+    const firstLineFade =
+      miniGameState.phoneDialogueLineIndex === firstJohnLineIndex
+        ? Math.min((performance.now() - miniGameState.phoneDialogueLineStartedAt) / 420, 1)
+        : 1;
+    context.save();
+    context.globalAlpha *= firstLineFade;
+    context.imageSmoothingEnabled = false;
+    context.shadowColor = "rgba(255, 170, 80, 0.34)";
+    context.shadowBlur = 16;
+    context.drawImage(john, halfWidth + halfWidth * 0.52 - johnWidth / 2, bottomY - johnHeight, johnWidth, johnHeight);
+    context.restore();
+  }
+}
+
+function drawPhoneDialogueBubble(context) {
+  const line = PHONE_DIALOGUE_LINES[miniGameState.phoneDialogueLineIndex];
+
+  if (!line || performance.now() < miniGameState.phoneDialogueLineStartedAt) {
+    return;
+  }
+
+  const lineAge = performance.now() - miniGameState.phoneDialogueLineStartedAt;
+  const typedCharacters = Math.min(line.text.length, Math.floor(lineAge / PHONE_DIALOGUE_TYPE_SPEED_MS));
+  const visibleText = line.text.slice(0, typedCharacters);
+  const isWizard = line.speaker === "wizard";
+  const halfWidth = window.innerWidth / 2;
+  const bubbleWidth = Math.min(halfWidth - 34, 380);
+  const bubbleHeight = Math.max(72, Math.min(128, window.innerHeight * 0.28));
+  const bubbleX = isWizard ? 18 : window.innerWidth - bubbleWidth - 18;
+  const bubbleY = Math.max(18, window.innerHeight * 0.09);
+
+  context.save();
+  context.fillStyle = isWizard ? "rgba(3, 18, 10, 0.9)" : "rgba(24, 12, 4, 0.91)";
+  context.strokeStyle = isWizard ? "rgba(156, 255, 156, 0.78)" : "rgba(255, 190, 92, 0.82)";
+  context.shadowColor = isWizard ? "rgba(80, 255, 130, 0.32)" : "rgba(255, 170, 80, 0.34)";
+  context.shadowBlur = 12;
+  context.lineWidth = 2;
+  context.fillRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+  context.strokeRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+
+  context.shadowBlur = 0;
+  context.fillStyle = isWizard ? "#9cff9c" : "#ffbd5f";
+  context.font = `900 ${Math.max(10, Math.min(13, window.innerHeight * 0.034))}px 'Courier New', monospace`;
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  context.fillText(isWizard ? "RETRO WIZ" : "SCATTY JOHN", bubbleX + 12, bubbleY + 9);
+
+  context.fillStyle = "#ffffff";
+  context.font = `bold ${Math.max(10, Math.min(14, window.innerHeight * 0.038))}px 'Courier New', monospace`;
+  const lines = wrapCanvasText(context, visibleText, bubbleWidth - 24);
+  const lineHeight = Math.max(14, Math.min(18, window.innerHeight * 0.044));
+
+  lines.slice(0, 5).forEach((textLine, index) => {
+    context.fillText(textLine, bubbleX + 12, bubbleY + 31 + index * lineHeight);
+  });
+
+  if (typedCharacters < line.text.length) {
+    const cursorLine = Math.min(lines.length - 1, 4);
+    const cursorText = lines[cursorLine] || "";
+    const cursorX = bubbleX + 12 + context.measureText(cursorText).width + 3;
+    const cursorY = bubbleY + 33 + cursorLine * lineHeight;
+    context.fillStyle = Math.floor(performance.now() / 180) % 2 ? "#ffffff" : "rgba(255, 255, 255, 0.25)";
+    context.fillRect(cursorX, cursorY, 7, lineHeight - 4);
+  }
+
+  context.restore();
+}
+
+function drawPhoneChallengePrompt(context) {
+  if (!miniGameState.phoneChallengePromptAt) {
+    miniGameState.phoneChallengeButton = null;
+    return;
+  }
+
+  const now = performance.now();
+  const fadeProgress = Math.min((now - miniGameState.phoneChallengePromptAt) / PHONE_CHALLENGE_PROMPT_FADE_MS, 1);
+  const promptWidth = Math.min(window.innerWidth * 0.58, 430);
+  const promptHeight = Math.min(window.innerHeight * 0.36, 180);
+  const promptX = window.innerWidth / 2 - promptWidth / 2;
+  const promptY = window.innerHeight / 2 - promptHeight / 2;
+  const buttonWidth = Math.min(promptWidth * 0.58, 190);
+  const buttonHeight = Math.max(38, Math.min(52, window.innerHeight * 0.12));
+  const buttonX = window.innerWidth / 2 - buttonWidth / 2;
+  const buttonY = promptY + promptHeight - buttonHeight - 24;
+
+  miniGameState.phoneChallengeButton = {
+    x: buttonX,
+    y: buttonY,
+    width: buttonWidth,
+    height: buttonHeight,
+  };
+
+  context.save();
+  context.globalAlpha *= fadeProgress;
+  context.fillStyle = "rgba(2, 10, 5, 0.92)";
+  context.strokeStyle = "rgba(156, 255, 156, 0.82)";
+  context.shadowColor = "rgba(80, 255, 130, 0.34)";
+  context.shadowBlur = 18;
+  context.lineWidth = 2;
+  context.fillRect(promptX, promptY, promptWidth, promptHeight);
+  context.strokeRect(promptX, promptY, promptWidth, promptHeight);
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffffff";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `900 ${Math.max(14, Math.min(22, window.innerHeight * 0.055))}px 'Courier New', monospace`;
+  wrapCanvasText(context, "Accept Scatty John's Challenge?", promptWidth - 34)
+    .slice(0, 2)
+    .forEach((line, index, lines) => {
+      const lineHeight = Math.max(18, Math.min(26, window.innerHeight * 0.066));
+      const startY = promptY + 44 - ((lines.length - 1) * lineHeight) / 2;
+      context.fillText(line, window.innerWidth / 2, startY + index * lineHeight);
+    });
+
+  context.fillStyle = "#19a947";
+  context.strokeStyle = "#9cff9c";
+  context.shadowColor = "rgba(80, 255, 130, 0.42)";
+  context.shadowBlur = 14;
+  context.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+  context.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffffff";
+  context.font = `900 ${Math.max(13, Math.min(20, window.innerHeight * 0.052))}px 'Courier New', monospace`;
+  context.fillText("Accept", window.innerWidth / 2, buttonY + buttonHeight / 2);
+  context.restore();
+}
+
+function loadRetroPhoneImage() {
+  if (miniGameState.phoneImage) {
+    return miniGameState.phoneImage;
+  }
+
+  const image = new Image();
+  image.src = RETRO_PHONE_IMAGE_URL;
+  miniGameState.phoneImage = image;
+  return image;
+}
+
+function getPhoneRingShake(ringAge) {
+  if (ringAge < 0 || ringAge > POST_GAME_PHONE_RING_DURATION_MS) {
+    return 0;
+  }
+
+  const firstRing = getPhoneRingClusterShake(ringAge, 200, 650);
+  const secondRing = getPhoneRingClusterShake(ringAge, 850, 1250);
+  return Math.max(firstRing, secondRing) * 9;
+}
+
+function getPhoneRingClusterShake(ringAge, start, end) {
+  if (ringAge < start || ringAge > end) {
+    return 0;
+  }
+
+  const progress = (ringAge - start) / (end - start);
+  const envelope = Math.sin(progress * Math.PI);
+  const tremble = 0.68 + Math.abs(Math.sin(ringAge / 24)) * 0.32;
+  return envelope * tremble;
+}
+
+function drawRetroPhone(context, width, height, ringShake) {
+  const phoneImage = loadRetroPhoneImage();
+
+  context.save();
+  context.imageSmoothingEnabled = false;
+  context.shadowColor = "rgba(156, 255, 156, 0.28)";
+  context.shadowBlur = 18;
+
+  if (phoneImage.complete && phoneImage.naturalWidth > 0) {
+    const aspect = phoneImage.naturalWidth / phoneImage.naturalHeight;
+    context.drawImage(phoneImage, -width / 2, -width / aspect / 2, width, width / aspect);
+  }
+
+  if (ringShake > 0.2) {
+    context.strokeStyle = `rgba(255, 255, 255, ${Math.min(0.8, ringShake / 8)})`;
+    context.lineWidth = 2;
+    [-1, 1].forEach((side) => {
+      context.beginPath();
+      context.arc(side * width * 0.58, -height * 0.33, width * 0.08, -0.9, 0.9);
+      context.stroke();
+      context.beginPath();
+      context.arc(side * width * 0.66, -height * 0.33, width * 0.12, -0.9, 0.9);
+      context.stroke();
+    });
+  }
+
+  context.restore();
+}
+
 function drawMiniGameHud(context) {
   const remainingSeconds = Math.max(
     0,
@@ -4611,6 +5400,16 @@ function drawMiniGameHud(context) {
   context.shadowColor = "rgba(156, 255, 156, 0.45)";
   context.shadowBlur = 10;
 
+  if (
+    miniGameState.status === "phoneTransition" ||
+    miniGameState.status === "phone" ||
+    miniGameState.status === "phoneDialogue" ||
+    miniGameState.status === "phoneDone"
+  ) {
+    context.restore();
+    return;
+  }
+
   if (miniGameState.status === "failed") {
     drawFailedMiniGameOverlay(context);
     context.restore();
@@ -4618,8 +5417,13 @@ function drawMiniGameHud(context) {
   }
 
   if (miniGameState.status === "victory") {
-    context.font = "32px 'Courier New', monospace";
-    context.fillStyle = "#ffffff";
+    const age = performance.now() - (miniGameState.victoryStartedAt || performance.now());
+    const fadeOut = Math.min(Math.max((age - MINI_GAME_VICTORY_HOLD_MS) / MINI_GAME_VICTORY_FADE_MS, 0), 1);
+    context.globalAlpha = 1 - fadeOut;
+    context.font = `900 ${Math.max(48, Math.min(86, window.innerHeight * 0.2))}px 'Courier New', monospace`;
+    context.fillStyle = "#6dff66";
+    context.shadowColor = "rgba(109, 255, 102, 0.95)";
+    context.shadowBlur = 26;
     context.fillText("VICTORY", window.innerWidth / 2, window.innerHeight / 2 - 18);
     context.restore();
     return;
@@ -4682,7 +5486,21 @@ function drawFailedMiniGameOverlay(context) {
     miniGameState.failedButtons = { retry, skip };
     context.globalAlpha = buttonsOpacity;
     drawFailedButton(context, retry, "Retry");
-    drawFailedButton(context, skip, "Skip level", canSkip ? "" : "1/2");
+    drawFailedButton(context, skip, "Skip level", canSkip ? "2/2" : "1/2");
+
+    if (!canSkip) {
+      const blink = 0.45 + Math.sin(performance.now() / 260) * 0.35;
+      context.globalAlpha = buttonsOpacity * blink;
+      context.shadowColor = "rgba(255, 255, 255, 0.35)";
+      context.shadowBlur = 8;
+      context.fillStyle = "#ffffff";
+      context.font = `bold ${Math.max(10, Math.min(14, window.innerHeight * 0.036))}px 'Courier New', monospace`;
+      context.fillText(
+        "Come on... give it one more try you got this",
+        centerX,
+        y + buttonHeight / 2 + Math.max(20, window.innerHeight * 0.055)
+      );
+    }
   } else {
     miniGameState.failedButtons = null;
   }
@@ -6249,6 +7067,11 @@ async function prepareLoadingScene() {
     }
 
     loadingState.sequenceStarted = true;
+
+    if (TEST_START_AT_SKIP_LEVEL_FAIL) {
+      startMiniGameAtLockedSkipFail();
+      return;
+    }
 
     if (TEST_START_AT_TRANSMISSION) {
       loadingState.activeSurface = "transmission";
