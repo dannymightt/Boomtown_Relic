@@ -108,6 +108,32 @@ const PHONE_DIALOGUE_TYPE_SPEED_MS = 22;
 const PHONE_DIALOGUE_HOLD_MS = 1900;
 const PHONE_CHALLENGE_PROMPT_FADE_MS = 360;
 const PHONE_CHALLENGE_ACCEPT_FADE_MS = 850;
+const CUP_TABLE_SCENE_DELAY_MS = 1000;
+const CUP_TABLE_SCENE_FADE_MS = 900;
+const CUP_TABLE_COUNT = 20;
+const CUP_TABLE_JOHN_DELAY_MS = 1000;
+const CUP_TABLE_JOHN_TYPE_SPEED_MS = 20;
+const CUP_TABLE_JOHN_LINE_HOLD_MS = 3200;
+const CUP_TABLE_JOHN_FINAL_HOLD_MS = 900;
+const CUP_TABLE_JOHN_FINAL_LINE = "Ok im just gonna pick a cup now quick";
+const CUP_TABLE_SELECTION_DURATION_MS = 13500;
+const CUP_TABLE_SELECTION_RED_START_MS = 6000;
+const CUP_TABLE_SELECTION_RED_RAMP_MS = 4000;
+const CUP_TABLE_SELECTION_FINAL_FLASH_MS = 650;
+const CUP_TABLE_SELECTION_PEEK_MS = 2000;
+const CUP_TABLE_PICK_PROMPT_LINE = "ok now time to pick yours";
+const CUP_TABLE_DRINK_OPTIONS = ["Rio", "Rubicon", "Monster", "Red Bull", "Fanta", "Fanta Lemon", "Coke", "Diet Coke"];
+const CUP_TABLE_POUR_MS = 2300;
+const CUP_TABLE_POST_POUR_TYPE_SPEED_MS = 22;
+const CUP_TABLE_POST_POUR_HOLD_MS = 4300;
+const CUP_TABLE_DRINK_CHOICE_MS = 10000;
+const CUP_TABLE_DRINK_ANIMATION_MS = 2000;
+const CUP_TABLE_DRINK_RESULT_HOLD_MS = 1200;
+const CUP_TABLE_JOHN_TURN_MS = 2000;
+const CUP_TABLE_JOHN_DRINK_MS = 1800;
+const CUP_TABLE_FAIL_FADE_MS = 900;
+const CUP_TABLE_RETRY_INTRO_TYPE_SPEED_MS = 22;
+const CUP_TABLE_RETRY_INTRO_HOLD_MS = 900;
 const MINI_GAME_BIG_GOBLIN_START_MS = 15000;
 const MINI_GAME_LEVEL_REQUIREMENTS = [0, 2, 3, 4, 5];
 const MINI_GAME_BOSS_HEALTH = 80;
@@ -139,6 +165,7 @@ const MINI_GAME_WIZARD_TIP_EXIT_MS = 760;
 const TEST_START_AT_TRANSMISSION = false;
 const TEST_START_AT_MINI_GAME_INTRO = false;
 const TEST_START_AT_SKIP_LEVEL_FAIL = false;
+const TEST_START_AT_PHONE_CHALLENGE = true;
 
 const PHONE_DIALOGUE_LINES = [
   { speaker: "wizard", text: "hello?" },
@@ -158,6 +185,19 @@ const PHONE_DIALOGUE_LINES = [
   { speaker: "john", text: "they're being dickheads around hydro rn" },
   { speaker: "wizard", text: "fuck man, im on my way but still so far to go" },
   { speaker: "john", text: "you and your guy yeah beat me at this game and ill give you a fat speed boost" },
+];
+
+const CUP_TABLE_JOHN_LINES = [
+  "So in this game we will take turns editing one of these drinks whilst not letting the other person know which cup you have selected to do so.",
+  "We will then go round for round, each selecting a cup that isn't our own, and drinking.",
+  "If we select the opponents cup and drink from it, we are eliminated.",
+  "So if i drink the cup you selected, i lose. And then vice versa, makes sense?",
+];
+
+const CUP_TABLE_SELECTION_JOHN_PEEKS = [
+  "hmmm i wonderrr",
+  "oh yes thats it... so very devious",
+  "haha, good luck chud",
 ];
 
 // Edit this array to change the opening terminal sequence.
@@ -334,6 +374,53 @@ const miniGameState = {
   phoneChallengePromptAt: 0,
   phoneChallengeAcceptedAt: 0,
   phoneChallengeButton: null,
+  cupTableStartedAt: 0,
+  cupTableCups: [],
+  cupTableDecor: [],
+  cupTableJohnStartedAt: 0,
+  cupTableJohnLineIndex: 0,
+  cupTableJohnLineStartedAt: 0,
+  cupTableJohnTypingActive: false,
+  cupTableJohnButtons: null,
+  cupTableJohnAccepted: false,
+  cupTablePhase: "waiting",
+  cupTableJohnFinalStartedAt: 0,
+  cupTableSelectionStartedAt: 0,
+  cupTableSelectionIndex: -1,
+  cupTableNextSelectionAt: 0,
+  cupTableSelectionFlashAt: 0,
+  cupTableSelectionPeeks: [],
+  cupTablePickPromptStartedAt: 0,
+  cupTableDrinkOptions: [],
+  cupTableDrinkButtons: null,
+  cupTableSelectedDrink: "",
+  cupTablePourColor: "",
+  cupTableSelectedCupIndex: -1,
+  cupTableCupHitBoxes: [],
+  cupTableConfirmButton: null,
+  cupTablePourStartedAt: 0,
+  cupTablePostPourDialogueStartedAt: 0,
+  cupTablePostPourLineIndex: 0,
+  cupTablePostPourLineStartedAt: 0,
+  cupTablePostPourTypingActive: false,
+  cupTableBadCupIndex: -1,
+  cupTableDrinkChoiceStartedAt: 0,
+  cupTableDrinkSelectedCupIndex: -1,
+  cupTableDrinkConfirmButton: null,
+  cupTableDrinkStartedAt: 0,
+  cupTableDrinkResultAt: 0,
+  cupTableDrinkFailed: false,
+  cupTableIsRetryRound: false,
+  cupTableRetryIntroStartedAt: 0,
+  cupTableRetryIntroTypingActive: false,
+  cupTableFailedAt: 0,
+  cupTableFailButtons: null,
+  cupTableJohnTurnStartedAt: 0,
+  cupTableJohnTurnSelectionIndex: -1,
+  cupTableJohnTurnNextSelectionAt: 0,
+  cupTableJohnSelectedCupIndex: -1,
+  cupTableJohnDrinkStartedAt: 0,
+  cupTableJohnLost: false,
   johnImage: null,
   failedAt: 0,
   failedButtons: null,
@@ -2788,6 +2875,11 @@ function handleMiniGamePress(event) {
     return;
   }
 
+  if (miniGameState.status === "cupTable") {
+    handleCupTablePress(pressPoint);
+    return;
+  }
+
   if (miniGameState.status !== "playing") {
     return;
   }
@@ -2848,6 +2940,134 @@ function handlePhoneDialoguePress(point) {
   miniGameState.phoneChallengeAcceptedAt = performance.now();
   miniGameState.phoneChallengeButton = null;
   playSoundEffect("menuStart", { minGap: 120, volume: 0.72 });
+}
+
+function handleCupTablePress(point) {
+  if (miniGameState.cupTablePhase === "failed" && miniGameState.cupTableFailButtons) {
+    if (isPointInsideRect(point, miniGameState.cupTableFailButtons.retry)) {
+      startCupTableRetryRound(performance.now());
+      playSoundEffect("menuStart", { minGap: 120, volume: 0.7 });
+      return;
+    }
+
+    if (isPointInsideRect(point, miniGameState.cupTableFailButtons.skip)) {
+      miniGameState.cupTablePhase = "skippedBlack";
+      miniGameState.cupTableFailButtons = null;
+      miniGameState.isRunning = false;
+      playSoundEffect("menuStart", { minGap: 120, volume: 0.6 });
+      return;
+    }
+  }
+
+  if (miniGameState.cupTablePhase === "pickPrompt" && miniGameState.cupTableDrinkButtons) {
+    const selectedButton = miniGameState.cupTableDrinkButtons.find((button) => isPointInsideRect(point, button));
+
+    if (selectedButton) {
+      playSoundEffect("menuStart", { minGap: 120, volume: 0.68 });
+      startCupTableCupChoice(selectedButton.label);
+      return;
+    }
+  }
+
+  if (miniGameState.cupTablePhase === "chooseCup") {
+    if (
+      miniGameState.cupTableConfirmButton &&
+      miniGameState.cupTableSelectedCupIndex >= 0 &&
+      isPointInsideRect(point, miniGameState.cupTableConfirmButton)
+    ) {
+      if (miniGameState.cupTableIsRetryRound) {
+        startCupTableJohnTurn(performance.now());
+      } else {
+        startCupTablePour(performance.now());
+      }
+      playSoundEffect("menuStart", { minGap: 120, volume: 0.74 });
+      return;
+    }
+
+    const selectedCup = miniGameState.cupTableCupHitBoxes
+      .filter(Boolean)
+      .find((hitBox) => isPointInsideRect(point, hitBox));
+
+    if (selectedCup) {
+      miniGameState.cupTableSelectedCupIndex = selectedCup.index;
+      miniGameState.cupTableDrinkButtons = null;
+      playSoundEffect("tapPop", { minGap: 80, volume: 0.52 });
+      return;
+    }
+  }
+
+  if (miniGameState.cupTablePhase === "drinkChoice") {
+    if (
+      miniGameState.cupTableDrinkConfirmButton &&
+      miniGameState.cupTableDrinkSelectedCupIndex >= 0 &&
+      isPointInsideRect(point, miniGameState.cupTableDrinkConfirmButton)
+    ) {
+      startCupTableDrinkAnimation(performance.now());
+      playSoundEffect("menuStart", { minGap: 120, volume: 0.74 });
+      return;
+    }
+
+    const selectedCup = miniGameState.cupTableCupHitBoxes
+      .filter(Boolean)
+      .find((hitBox) => isPointInsideRect(point, hitBox));
+
+    if (selectedCup) {
+      miniGameState.cupTableDrinkSelectedCupIndex = selectedCup.index;
+      playSoundEffect("tapPop", { minGap: 80, volume: 0.52 });
+      return;
+    }
+  }
+
+  if (advanceCupTablePostPourDialogueIfReady(performance.now())) {
+    return;
+  }
+
+  if (advanceCupTableJohnDialogueIfReady(performance.now())) {
+    return;
+  }
+
+  const buttons = miniGameState.cupTableJohnButtons;
+
+  if (!buttons || miniGameState.cupTableJohnAccepted) {
+    return;
+  }
+
+  if (isPointInsideRect(point, buttons.accept)) {
+    startCupTableJohnFinalLine(performance.now());
+    playSoundEffect("menuStart", { minGap: 120, volume: 0.68 });
+    return;
+  }
+
+  if (isPointInsideRect(point, buttons.repeat)) {
+    playSoundEffect("tapPop", { minGap: 120, volume: 0.5 });
+    restartCupTableJohnDialogue(performance.now());
+  }
+}
+
+function advanceCupTableJohnDialogueIfReady(timestamp) {
+  if (miniGameState.cupTablePhase !== "rules") {
+    return false;
+  }
+
+  const line = CUP_TABLE_JOHN_LINES[miniGameState.cupTableJohnLineIndex];
+
+  if (!line) {
+    return false;
+  }
+
+  const typeDuration = line.length * CUP_TABLE_JOHN_TYPE_SPEED_MS;
+  const lineAge = timestamp - miniGameState.cupTableJohnLineStartedAt;
+  const isLastLine = miniGameState.cupTableJohnLineIndex >= CUP_TABLE_JOHN_LINES.length - 1;
+
+  if (lineAge < typeDuration || isLastLine) {
+    return false;
+  }
+
+  miniGameState.cupTableJohnLineIndex += 1;
+  miniGameState.cupTableJohnLineStartedAt = timestamp;
+  miniGameState.cupTableJohnButtons = null;
+  playSoundEffect("tapPop", { minGap: 120, volume: 0.38 });
+  return true;
 }
 
 function isPointInsideRect(point, rect) {
@@ -2976,6 +3196,8 @@ function updateMiniGame(timestamp) {
     updatePostGamePhone(timestamp);
   } else if (loadingState.isLandscape && miniGameState.status === "phoneDialogue") {
     updatePhoneDialogue(timestamp);
+  } else if (loadingState.isLandscape && miniGameState.status === "cupTable") {
+    updateCupTableScene(timestamp);
   } else if (loadingState.isLandscape && miniGameState.status === "playing") {
     updateMiniGameWizardTip(timestamp);
 
@@ -3012,6 +3234,23 @@ function updateMiniGame(timestamp) {
 
   if (miniGameState.status !== "phoneDialogue" && miniGameState.phoneDialogueTypingActive) {
     miniGameState.phoneDialogueTypingActive = false;
+    stopTypingSound();
+  }
+
+  if (miniGameState.status !== "cupTable" && miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = false;
+    stopTypingSound();
+  }
+
+  if (
+    miniGameState.status === "cupTable" &&
+    miniGameState.cupTablePhase !== "finalLine" &&
+    miniGameState.cupTablePhase !== "pickPrompt" &&
+    miniGameState.cupTablePhase !== "postPourDialogue" &&
+    miniGameState.cupTableJohnTypingActive &&
+    miniGameState.cupTablePhase !== "rules"
+  ) {
+    miniGameState.cupTableJohnTypingActive = false;
     stopTypingSound();
   }
 
@@ -3074,17 +3313,7 @@ function startPhoneDialogue(timestamp) {
 function updatePhoneDialogue(timestamp) {
   if (miniGameState.phoneChallengeAcceptedAt) {
     if (timestamp - miniGameState.phoneChallengeAcceptedAt > PHONE_CHALLENGE_ACCEPT_FADE_MS) {
-      if (miniGameState.context) {
-        miniGameState.context.save();
-        miniGameState.context.setTransform(1, 0, 0, 1, 0, 0);
-        miniGameState.context.fillStyle = "#000000";
-        miniGameState.context.fillRect(0, 0, window.innerWidth, window.innerHeight);
-        miniGameState.context.restore();
-      }
-
-      miniGameState.status = "phoneDone";
-      miniGameState.isRunning = false;
-      miniGameState.phoneChallengeButton = null;
+      startCupTableScene(timestamp);
     }
 
     return;
@@ -3139,6 +3368,792 @@ function startPostGamePhoneTransition(timestamp) {
   miniGameState.fairyBombs = [];
   miniGameState.explosions = [];
   miniGameState.hitMarkers = [];
+}
+
+function startCupTableScene(timestamp) {
+  miniGameState.status = "cupTable";
+  miniGameState.isRunning = true;
+  miniGameState.cupTableStartedAt = timestamp;
+  miniGameState.cupTableCups = createCupTableCups();
+  miniGameState.cupTableDecor = createCupTableDecor(miniGameState.cupTableCups);
+  miniGameState.cupTableJohnStartedAt = 0;
+  miniGameState.cupTableJohnLineIndex = 0;
+  miniGameState.cupTableJohnLineStartedAt = 0;
+  miniGameState.cupTableJohnTypingActive = false;
+  miniGameState.cupTableJohnButtons = null;
+  miniGameState.cupTableJohnAccepted = false;
+  miniGameState.cupTablePhase = "waiting";
+  miniGameState.cupTableJohnFinalStartedAt = 0;
+  miniGameState.cupTableSelectionStartedAt = 0;
+  miniGameState.cupTableSelectionIndex = -1;
+  miniGameState.cupTableNextSelectionAt = 0;
+  miniGameState.cupTableSelectionFlashAt = 0;
+  miniGameState.cupTableSelectionPeeks = [];
+  miniGameState.cupTablePickPromptStartedAt = 0;
+  miniGameState.cupTableDrinkOptions = [];
+  miniGameState.cupTableDrinkButtons = null;
+  miniGameState.cupTableSelectedDrink = "";
+  miniGameState.cupTablePourColor = "";
+  miniGameState.cupTableSelectedCupIndex = -1;
+  miniGameState.cupTableCupHitBoxes = [];
+  miniGameState.cupTableConfirmButton = null;
+  miniGameState.cupTablePourStartedAt = 0;
+  miniGameState.cupTablePostPourDialogueStartedAt = 0;
+  miniGameState.cupTablePostPourLineIndex = 0;
+  miniGameState.cupTablePostPourLineStartedAt = 0;
+  miniGameState.cupTablePostPourTypingActive = false;
+  miniGameState.cupTablePhase = "waiting";
+  miniGameState.cupTableJohnFinalStartedAt = 0;
+  miniGameState.cupTableSelectionStartedAt = 0;
+  miniGameState.cupTableSelectionIndex = -1;
+  miniGameState.cupTableNextSelectionAt = 0;
+  miniGameState.cupTableSelectionFlashAt = 0;
+  miniGameState.cupTableSelectionPeeks = [];
+  miniGameState.cupTablePickPromptStartedAt = 0;
+  miniGameState.cupTableDrinkOptions = [];
+  miniGameState.cupTableDrinkButtons = null;
+  miniGameState.cupTableSelectedDrink = "";
+  miniGameState.cupTablePourColor = "";
+  miniGameState.cupTableSelectedCupIndex = -1;
+  miniGameState.cupTableCupHitBoxes = [];
+  miniGameState.cupTableConfirmButton = null;
+  miniGameState.cupTablePourStartedAt = 0;
+  miniGameState.cupTablePostPourDialogueStartedAt = 0;
+  miniGameState.cupTablePostPourLineIndex = 0;
+  miniGameState.cupTablePostPourLineStartedAt = 0;
+  miniGameState.cupTablePostPourTypingActive = false;
+  miniGameState.cupTablePhase = "waiting";
+  miniGameState.cupTableJohnFinalStartedAt = 0;
+  miniGameState.cupTableSelectionStartedAt = 0;
+  miniGameState.cupTableSelectionIndex = -1;
+  miniGameState.cupTableNextSelectionAt = 0;
+  miniGameState.cupTableSelectionFlashAt = 0;
+  miniGameState.cupTableSelectionPeeks = [];
+  miniGameState.cupTablePickPromptStartedAt = 0;
+  miniGameState.cupTableDrinkOptions = [];
+  miniGameState.cupTableDrinkButtons = null;
+  miniGameState.cupTableSelectedDrink = "";
+  miniGameState.cupTablePourColor = "";
+  miniGameState.cupTableSelectedCupIndex = -1;
+  miniGameState.cupTableCupHitBoxes = [];
+  miniGameState.cupTableConfirmButton = null;
+  miniGameState.cupTablePourStartedAt = 0;
+  miniGameState.cupTablePostPourDialogueStartedAt = 0;
+  miniGameState.cupTablePostPourLineIndex = 0;
+  miniGameState.cupTablePostPourLineStartedAt = 0;
+  miniGameState.cupTablePostPourTypingActive = false;
+  miniGameState.cupTableBadCupIndex = -1;
+  miniGameState.cupTableDrinkChoiceStartedAt = 0;
+  miniGameState.cupTableDrinkSelectedCupIndex = -1;
+  miniGameState.cupTableDrinkConfirmButton = null;
+  miniGameState.cupTableDrinkStartedAt = 0;
+  miniGameState.cupTableDrinkResultAt = 0;
+  miniGameState.cupTableDrinkFailed = false;
+  miniGameState.cupTableIsRetryRound = false;
+  miniGameState.cupTableRetryIntroStartedAt = 0;
+  miniGameState.cupTableRetryIntroTypingActive = false;
+  miniGameState.cupTableFailedAt = 0;
+  miniGameState.cupTableFailButtons = null;
+  miniGameState.cupTableJohnTurnStartedAt = 0;
+  miniGameState.cupTableJohnTurnSelectionIndex = -1;
+  miniGameState.cupTableJohnTurnNextSelectionAt = 0;
+  miniGameState.cupTableJohnSelectedCupIndex = -1;
+  miniGameState.cupTableJohnDrinkStartedAt = 0;
+  miniGameState.cupTableJohnLost = false;
+  miniGameState.phoneChallengeButton = null;
+  miniGameState.phoneChallengePromptAt = 0;
+  miniGameState.phoneChallengeAcceptedAt = 0;
+  loadJohnCharacterImage();
+  unlockTypingAudio().catch(() => {});
+}
+
+function updateCupTableScene(timestamp) {
+  const tableReadyAt = miniGameState.cupTableStartedAt + CUP_TABLE_SCENE_DELAY_MS + CUP_TABLE_SCENE_FADE_MS;
+
+  if (!miniGameState.cupTableJohnStartedAt && timestamp >= tableReadyAt + CUP_TABLE_JOHN_DELAY_MS) {
+    restartCupTableJohnDialogue(timestamp);
+  }
+
+  updateCupTableJohnDialogue(timestamp);
+  updateCupTableJohnFinalLine(timestamp);
+  updateCupTableSelectionSequence(timestamp);
+  updateCupTablePour(timestamp);
+  updateCupTablePostPourDialogue(timestamp);
+  updateCupTableRetryIntro(timestamp);
+  updateCupTableDrinkChoice(timestamp);
+  updateCupTableDrinkAnimation(timestamp);
+  updateCupTableJohnTurn(timestamp);
+  updateCupTableJohnDrink(timestamp);
+}
+
+function restartCupTableJohnDialogue(timestamp) {
+  miniGameState.cupTableJohnStartedAt = timestamp;
+  miniGameState.cupTableJohnLineIndex = 0;
+  miniGameState.cupTableJohnLineStartedAt = timestamp;
+  miniGameState.cupTableJohnButtons = null;
+  miniGameState.cupTableJohnAccepted = false;
+  miniGameState.cupTablePhase = "rules";
+  miniGameState.cupTableJohnFinalStartedAt = 0;
+  miniGameState.cupTableSelectionStartedAt = 0;
+  miniGameState.cupTableSelectionIndex = -1;
+  miniGameState.cupTableNextSelectionAt = 0;
+  miniGameState.cupTableSelectionFlashAt = 0;
+  miniGameState.cupTableSelectionPeeks = [];
+  miniGameState.cupTablePickPromptStartedAt = 0;
+  miniGameState.cupTableDrinkOptions = [];
+  miniGameState.cupTableDrinkButtons = null;
+  miniGameState.cupTableSelectedDrink = "";
+  miniGameState.cupTableSelectedCupIndex = -1;
+  miniGameState.cupTableConfirmButton = null;
+  miniGameState.cupTablePourStartedAt = 0;
+  miniGameState.cupTablePostPourDialogueStartedAt = 0;
+  miniGameState.cupTableBadCupIndex = -1;
+  miniGameState.cupTableDrinkChoiceStartedAt = 0;
+  miniGameState.cupTableDrinkSelectedCupIndex = -1;
+  miniGameState.cupTableDrinkConfirmButton = null;
+  miniGameState.cupTableDrinkStartedAt = 0;
+  miniGameState.cupTableDrinkResultAt = 0;
+  miniGameState.cupTableDrinkFailed = false;
+
+  if (miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = false;
+    stopTypingSound();
+  }
+}
+
+function updateCupTableJohnDialogue(timestamp) {
+  if (!miniGameState.cupTableJohnStartedAt || miniGameState.cupTablePhase !== "rules") {
+    if (miniGameState.cupTableJohnTypingActive) {
+      miniGameState.cupTableJohnTypingActive = false;
+      stopTypingSound();
+    }
+
+    return;
+  }
+
+  const line = CUP_TABLE_JOHN_LINES[miniGameState.cupTableJohnLineIndex];
+
+  if (!line) {
+    miniGameState.cupTableJohnButtons = miniGameState.cupTableJohnButtons || {};
+    return;
+  }
+
+  const lineAge = timestamp - miniGameState.cupTableJohnLineStartedAt;
+  const typeDuration = line.length * CUP_TABLE_JOHN_TYPE_SPEED_MS;
+  const isTyping = lineAge < typeDuration;
+
+  if (isTyping && !miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = startTypingSound();
+  }
+
+  if (!isTyping && miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = false;
+    stopTypingSound();
+  }
+
+  // Rule lines wait for the player to tap once each line has finished typing.
+}
+
+function startCupTableJohnFinalLine(timestamp) {
+  miniGameState.cupTablePhase = "finalLine";
+  miniGameState.cupTableJohnAccepted = true;
+  miniGameState.cupTableJohnFinalStartedAt = timestamp;
+  miniGameState.cupTableJohnButtons = null;
+
+  if (miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = false;
+    stopTypingSound();
+  }
+}
+
+function updateCupTableJohnFinalLine(timestamp) {
+  if (miniGameState.cupTablePhase !== "finalLine") {
+    return;
+  }
+
+  const lineAge = timestamp - miniGameState.cupTableJohnFinalStartedAt;
+  const typeDuration = CUP_TABLE_JOHN_FINAL_LINE.length * CUP_TABLE_JOHN_TYPE_SPEED_MS;
+  const isTyping = lineAge < typeDuration;
+
+  if (isTyping && !miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = startTypingSound();
+  }
+
+  if (!isTyping && miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = false;
+    stopTypingSound();
+  }
+
+  if (lineAge > typeDuration + CUP_TABLE_JOHN_FINAL_HOLD_MS) {
+    startCupTableSelectionSequence(timestamp);
+  }
+}
+
+function startCupTableSelectionSequence(timestamp) {
+  miniGameState.cupTablePhase = "selecting";
+  miniGameState.cupTableSelectionStartedAt = timestamp;
+  miniGameState.cupTableSelectionIndex = Math.floor(Math.random() * miniGameState.cupTableCups.length);
+  miniGameState.cupTableNextSelectionAt = timestamp;
+  miniGameState.cupTableSelectionFlashAt = 0;
+  miniGameState.cupTableSelectionPeeks = [];
+  miniGameState.cupTablePickPromptStartedAt = 0;
+  miniGameState.cupTableDrinkOptions = [];
+  miniGameState.cupTableDrinkButtons = null;
+  miniGameState.cupTableJohnButtons = null;
+  miniGameState.cupTableJohnTypingActive = false;
+  stopTypingSound();
+}
+
+function updateCupTableSelectionSequence(timestamp) {
+  if (miniGameState.cupTablePhase !== "selecting") {
+    return;
+  }
+
+  const age = timestamp - miniGameState.cupTableSelectionStartedAt;
+  const progress = Math.min(age / CUP_TABLE_SELECTION_DURATION_MS, 1);
+  const shakeIntensity = 0.7 + Math.pow(progress, 1.55) * 8.2;
+
+  triggerScreenShake(110, shakeIntensity);
+
+  if (age >= CUP_TABLE_SELECTION_DURATION_MS) {
+    if (!miniGameState.cupTableSelectionFlashAt) {
+      miniGameState.cupTableSelectionFlashAt = timestamp;
+      miniGameState.cupTableSelectionIndex = -1;
+      triggerScreenShake(760, 12);
+      playSoundEffect("tapPop", { minGap: 0, volume: 0.9 });
+      playSoundEffect("shoot", { minGap: 0, golden: true });
+    }
+
+    if (timestamp - miniGameState.cupTableSelectionFlashAt > CUP_TABLE_SELECTION_FINAL_FLASH_MS) {
+      startCupTablePickPrompt(timestamp);
+    }
+
+    return;
+  }
+
+  if (timestamp >= miniGameState.cupTableNextSelectionAt) {
+    const currentIndex = miniGameState.cupTableSelectionIndex;
+    let nextIndex = Math.floor(Math.random() * miniGameState.cupTableCups.length);
+
+    if (miniGameState.cupTableCups.length > 1) {
+      while (nextIndex === currentIndex) {
+        nextIndex = Math.floor(Math.random() * miniGameState.cupTableCups.length);
+      }
+    }
+
+    miniGameState.cupTableSelectionIndex = nextIndex;
+    miniGameState.cupTableNextSelectionAt = timestamp + getCupTableSelectionInterval(progress);
+    playSoundEffect("shoot", { minGap: 0, golden: progress > 0.78, volume: 0.04 + progress * 0.035 });
+  }
+}
+
+function getCupTableSelectionInterval(progress) {
+  const eased = 1 - Math.pow(1 - progress, 2.8);
+  return 380 - eased * 340;
+}
+
+function createCupTableSelectionPeeks() {
+  const edges = shuffleArray(["top", "right", "bottom", "left"]);
+  const timings = [2300, 5400, 8500].map((time) => time + Math.random() * 650 - 325);
+
+  return CUP_TABLE_SELECTION_JOHN_PEEKS.map((text, index) => ({
+    text,
+    edge: edges[index % edges.length],
+    offset: 0.18 + Math.random() * 0.64,
+    startedAtOffset: timings[index],
+  }));
+}
+
+function startCupTablePickPrompt(timestamp) {
+  miniGameState.cupTablePhase = "pickPrompt";
+  miniGameState.cupTableSelectionIndex = -1;
+  miniGameState.cupTablePickPromptStartedAt = timestamp;
+  miniGameState.cupTableDrinkOptions = shuffleArray(CUP_TABLE_DRINK_OPTIONS).slice(0, 4);
+  miniGameState.cupTableDrinkButtons = null;
+  miniGameState.cupTableJohnTypingActive = false;
+  stopTypingSound();
+}
+
+function startCupTableCupChoice(drink) {
+  miniGameState.cupTablePhase = "chooseCup";
+  miniGameState.cupTableSelectedDrink = drink;
+  miniGameState.cupTablePourColor = "";
+  miniGameState.cupTableSelectedCupIndex = -1;
+  miniGameState.cupTableDrinkButtons = null;
+  miniGameState.cupTableConfirmButton = null;
+  miniGameState.cupTableJohnTypingActive = false;
+  stopTypingSound();
+}
+
+function startCupTablePour(timestamp) {
+  miniGameState.cupTablePhase = "pouring";
+  miniGameState.cupTablePourStartedAt = timestamp;
+  miniGameState.cupTablePourColor = getRandomCupTablePourColor();
+  miniGameState.cupTableConfirmButton = null;
+}
+
+function updateCupTablePour(timestamp) {
+  if (miniGameState.cupTablePhase !== "pouring") {
+    return;
+  }
+
+  if (timestamp - miniGameState.cupTablePourStartedAt > CUP_TABLE_POUR_MS) {
+    startCupTablePostPourDialogue(timestamp);
+  }
+}
+
+function startCupTablePostPourDialogue(timestamp) {
+  miniGameState.cupTablePhase = "postPourDialogue";
+  miniGameState.cupTablePostPourDialogueStartedAt = timestamp;
+  miniGameState.cupTablePostPourLineIndex = 0;
+  miniGameState.cupTablePostPourLineStartedAt = timestamp;
+  miniGameState.cupTablePostPourTypingActive = false;
+  loadMiniGameWizardSprite();
+  loadJohnCharacterImage();
+  unlockTypingAudio().catch(() => {});
+}
+
+function updateCupTablePostPourDialogue(timestamp) {
+  if (miniGameState.cupTablePhase !== "postPourDialogue") {
+    if (miniGameState.cupTablePostPourTypingActive) {
+      miniGameState.cupTablePostPourTypingActive = false;
+      stopTypingSound();
+    }
+
+    return;
+  }
+
+  const line = getCupTablePostPourLines()[miniGameState.cupTablePostPourLineIndex];
+
+  if (!line) {
+    return;
+  }
+
+  const lineAge = timestamp - miniGameState.cupTablePostPourLineStartedAt;
+  const typeDuration = line.text.length * CUP_TABLE_POST_POUR_TYPE_SPEED_MS;
+  const isTyping = lineAge < typeDuration;
+
+  if (isTyping && !miniGameState.cupTablePostPourTypingActive) {
+    miniGameState.cupTablePostPourTypingActive = startTypingSound();
+  }
+
+  if (!isTyping && miniGameState.cupTablePostPourTypingActive) {
+    miniGameState.cupTablePostPourTypingActive = false;
+    stopTypingSound();
+  }
+
+  // These lines advance by tap once typing has finished, so players control the pace.
+}
+
+function getCupTablePostPourLines() {
+  return [
+    { speaker: "john", text: "haha, so what kind of devious shit did you put in my cup" },
+    { speaker: "wizard", text: `we just put in '${miniGameState.cupTableSelectedDrink || "that"}' why?` },
+    { speaker: "john", text: "oh, uhhhh.. no reason. um, good luck." },
+  ];
+}
+
+function advanceCupTablePostPourDialogueIfReady(timestamp) {
+  if (miniGameState.cupTablePhase !== "postPourDialogue") {
+    return false;
+  }
+
+  const lines = getCupTablePostPourLines();
+  const line = lines[miniGameState.cupTablePostPourLineIndex];
+
+  if (!line) {
+    return false;
+  }
+
+  const typeDuration = line.text.length * CUP_TABLE_POST_POUR_TYPE_SPEED_MS;
+  const lineAge = timestamp - miniGameState.cupTablePostPourLineStartedAt;
+
+  if (lineAge < typeDuration) {
+    return false;
+  }
+
+  if (miniGameState.cupTablePostPourLineIndex < lines.length - 1) {
+    miniGameState.cupTablePostPourLineIndex += 1;
+    miniGameState.cupTablePostPourLineStartedAt = timestamp;
+    playSoundEffect("tapPop", { minGap: 120, volume: 0.38 });
+    return true;
+  }
+
+  startCupTableDrinkChoice(timestamp);
+  playSoundEffect("menuStart", { minGap: 120, volume: 0.55 });
+  return true;
+}
+
+function startCupTableDrinkChoice(timestamp) {
+  miniGameState.cupTablePhase = "drinkChoice";
+  miniGameState.cupTableDrinkChoiceStartedAt = timestamp;
+  miniGameState.cupTableBadCupIndex = pickCupTableBadCupIndex();
+  miniGameState.cupTableDrinkSelectedCupIndex = -1;
+  miniGameState.cupTableDrinkConfirmButton = null;
+  miniGameState.cupTableDrinkStartedAt = 0;
+  miniGameState.cupTableDrinkResultAt = 0;
+  miniGameState.cupTableDrinkFailed = false;
+  miniGameState.cupTablePostPourTypingActive = false;
+  miniGameState.cupTableJohnTypingActive = false;
+  stopTypingSound();
+}
+
+function updateCupTableDrinkChoice(timestamp) {
+  if (miniGameState.cupTablePhase !== "drinkChoice") {
+    return;
+  }
+
+  if (timestamp - miniGameState.cupTableDrinkChoiceStartedAt > CUP_TABLE_DRINK_CHOICE_MS) {
+    miniGameState.cupTableDrinkFailed = true;
+    startCupTableFailure(timestamp);
+  }
+}
+
+function startCupTableDrinkAnimation(timestamp) {
+  miniGameState.cupTablePhase = "drinking";
+  miniGameState.cupTableDrinkStartedAt = timestamp;
+  miniGameState.cupTableDrinkResultAt = 0;
+  miniGameState.cupTableDrinkFailed =
+    miniGameState.cupTableDrinkSelectedCupIndex === miniGameState.cupTableBadCupIndex;
+  miniGameState.cupTableDrinkConfirmButton = null;
+  playSoundEffect("tapPop", { minGap: 120, volume: 0.5 });
+}
+
+function updateCupTableDrinkAnimation(timestamp) {
+  if (miniGameState.cupTablePhase !== "drinking") {
+    return;
+  }
+
+  if (timestamp - miniGameState.cupTableDrinkStartedAt <= CUP_TABLE_DRINK_ANIMATION_MS) {
+    return;
+  }
+
+  const selectedCup = miniGameState.cupTableCups[miniGameState.cupTableDrinkSelectedCupIndex];
+
+  if (miniGameState.cupTableDrinkFailed) {
+    startCupTableFailure(timestamp);
+    return;
+  }
+
+  if (selectedCup) {
+    selectedCup.removed = true;
+  }
+
+  triggerScreenShake(220, 2.5);
+  startCupTableJohnTurn(timestamp);
+}
+
+function pickCupTableBadCupIndex() {
+  const availableIndexes = getCupTableAvailableDrinkIndexes(false);
+
+  if (!availableIndexes.length) {
+    return -1;
+  }
+
+  return availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
+}
+
+function startCupTableFailure(timestamp) {
+  miniGameState.cupTablePhase = "failed";
+  miniGameState.cupTableFailedAt = timestamp;
+  miniGameState.cupTableFailButtons = null;
+  miniGameState.cupTableDrinkConfirmButton = null;
+  miniGameState.cupTableJohnTurnSelectionIndex = -1;
+  triggerScreenShake(900, 9);
+  playSoundEffect("explosion", { minGap: 120, volume: 0.5, rate: 0.72 });
+}
+
+function startCupTableRetryRound(timestamp) {
+  miniGameState.cupTableStartedAt = timestamp - CUP_TABLE_SCENE_DELAY_MS - CUP_TABLE_SCENE_FADE_MS;
+  miniGameState.cupTableCups = createCupTableCups();
+  miniGameState.cupTableDecor = createCupTableDecor(miniGameState.cupTableCups);
+  miniGameState.cupTableIsRetryRound = true;
+  miniGameState.cupTablePhase = "retryIntro";
+  miniGameState.cupTableRetryIntroStartedAt = timestamp;
+  miniGameState.cupTableRetryIntroTypingActive = false;
+  miniGameState.cupTableFailedAt = 0;
+  miniGameState.cupTableFailButtons = null;
+  miniGameState.cupTableSelectedCupIndex = -1;
+  miniGameState.cupTableBadCupIndex = -1;
+  miniGameState.cupTableDrinkSelectedCupIndex = -1;
+  miniGameState.cupTableDrinkConfirmButton = null;
+  miniGameState.cupTableJohnSelectedCupIndex = -1;
+  miniGameState.cupTableJohnTurnSelectionIndex = -1;
+  miniGameState.cupTableJohnTurnStartedAt = 0;
+  miniGameState.cupTableJohnDrinkStartedAt = 0;
+  miniGameState.cupTableJohnLost = false;
+  stopTypingSound();
+}
+
+function updateCupTableRetryIntro(timestamp) {
+  if (miniGameState.cupTablePhase !== "retryIntro") {
+    if (miniGameState.cupTableRetryIntroTypingActive) {
+      miniGameState.cupTableRetryIntroTypingActive = false;
+      stopTypingSound();
+    }
+
+    return;
+  }
+
+  const text = "come back for more ay?";
+  const age = timestamp - miniGameState.cupTableRetryIntroStartedAt;
+  const typeDuration = text.length * CUP_TABLE_RETRY_INTRO_TYPE_SPEED_MS;
+  const isTyping = age < typeDuration;
+
+  if (isTyping && !miniGameState.cupTableRetryIntroTypingActive) {
+    miniGameState.cupTableRetryIntroTypingActive = startTypingSound();
+  }
+
+  if (!isTyping && miniGameState.cupTableRetryIntroTypingActive) {
+    miniGameState.cupTableRetryIntroTypingActive = false;
+    stopTypingSound();
+  }
+
+  if (age > typeDuration + CUP_TABLE_RETRY_INTRO_HOLD_MS) {
+    startCupTableCupChoice("");
+    miniGameState.cupTableIsRetryRound = true;
+  }
+}
+
+function startCupTableJohnTurn(timestamp) {
+  miniGameState.cupTablePhase = "johnTurn";
+  miniGameState.cupTableJohnTurnStartedAt = timestamp;
+  miniGameState.cupTableJohnTurnNextSelectionAt = timestamp;
+  miniGameState.cupTableJohnTurnSelectionIndex = -1;
+  miniGameState.cupTableJohnSelectedCupIndex = -1;
+  miniGameState.cupTableDrinkSelectedCupIndex = -1;
+  miniGameState.cupTableDrinkConfirmButton = null;
+  stopTypingSound();
+}
+
+function updateCupTableJohnTurn(timestamp) {
+  if (miniGameState.cupTablePhase !== "johnTurn") {
+    return;
+  }
+
+  const age = timestamp - miniGameState.cupTableJohnTurnStartedAt;
+  const availableIndexes = getCupTableAvailableDrinkIndexes(true);
+
+  if (!availableIndexes.length) {
+    miniGameState.cupTablePhase = "johnWon";
+    return;
+  }
+
+  if (age >= CUP_TABLE_JOHN_TURN_MS) {
+    const chosenIndex = availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
+    miniGameState.cupTableJohnSelectedCupIndex = chosenIndex;
+    miniGameState.cupTableJohnTurnSelectionIndex = chosenIndex;
+    miniGameState.cupTableJohnLost = chosenIndex === miniGameState.cupTableSelectedCupIndex;
+    startCupTableJohnDrink(timestamp);
+    return;
+  }
+
+  if (timestamp >= miniGameState.cupTableJohnTurnNextSelectionAt) {
+    let nextIndex = availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
+
+    if (availableIndexes.length > 1) {
+      while (nextIndex === miniGameState.cupTableJohnTurnSelectionIndex) {
+        nextIndex = availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
+      }
+    }
+
+    miniGameState.cupTableJohnTurnSelectionIndex = nextIndex;
+    miniGameState.cupTableJohnTurnNextSelectionAt = timestamp + 210;
+    playSoundEffect("tapPop", { minGap: 80, volume: 0.24 });
+  }
+}
+
+function startCupTableJohnDrink(timestamp) {
+  miniGameState.cupTablePhase = "johnDrinking";
+  miniGameState.cupTableJohnDrinkStartedAt = timestamp;
+  triggerScreenShake(250, 2.4);
+}
+
+function updateCupTableJohnDrink(timestamp) {
+  if (miniGameState.cupTablePhase !== "johnDrinking") {
+    return;
+  }
+
+  if (timestamp - miniGameState.cupTableJohnDrinkStartedAt <= CUP_TABLE_JOHN_DRINK_MS) {
+    return;
+  }
+
+  if (miniGameState.cupTableJohnLost) {
+    miniGameState.cupTablePhase = "johnLost";
+    triggerScreenShake(850, 9);
+    playSoundEffect("levelUp", { minGap: 100, volume: 0.7 });
+    return;
+  }
+
+  const johnCup = miniGameState.cupTableCups[miniGameState.cupTableJohnSelectedCupIndex];
+
+  if (johnCup) {
+    johnCup.removed = true;
+  }
+
+  startCupTableDrinkChoice(timestamp);
+}
+
+function getCupTableAvailableDrinkIndexes(includeOwnCup = false) {
+  return miniGameState.cupTableCups
+    .map((cup, index) => ({ cup, index }))
+    .filter(({ cup, index }) => !cup.removed && (includeOwnCup || index !== miniGameState.cupTableSelectedCupIndex))
+    .map(({ index }) => index);
+}
+
+function createCupTableCups() {
+  const cupColors = ["#ff4fc8", "#f7e24a", "#9b62ff", "#43e66d", "#40d8ff", "#ff8c33"];
+  const cupAnchors = [
+    [0.24, 0.23], [0.42, 0.2], [0.6, 0.21], [0.76, 0.25],
+    [0.16, 0.37], [0.34, 0.35], [0.52, 0.34], [0.7, 0.37], [0.84, 0.42],
+    [0.23, 0.52], [0.43, 0.5], [0.62, 0.51], [0.79, 0.55],
+    [0.15, 0.67], [0.35, 0.68], [0.55, 0.67], [0.74, 0.7],
+    [0.27, 0.83], [0.49, 0.84], [0.68, 0.82],
+  ];
+
+  return shuffleArray(cupAnchors)
+    .slice(0, CUP_TABLE_COUNT)
+    .map(([x, y]) => ({
+      x: x + (Math.random() - 0.5) * 0.035,
+      y: y + (Math.random() - 0.5) * 0.03,
+      liquid: cupColors[Math.floor(Math.random() * cupColors.length)],
+      wobble: Math.random() * Math.PI * 2,
+      rotation: (Math.random() - 0.5) * 0.18,
+    }));
+}
+
+function shuffleArray(items) {
+  const shuffled = [...items];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled;
+}
+
+function createCupTableDecor(cups) {
+  const cornerSlots = [
+    { corner: "topLeft", x: 0.06, y: 0.18 },
+    { corner: "topRight", x: 0.94, y: 0.18 },
+    { corner: "bottomLeft", x: 0.08, y: 0.86 },
+    { corner: "bottomRight", x: 0.92, y: 0.86 },
+  ];
+  const decorKinds = shuffleArray([
+    { kind: "pan", size: 0.24, clearance: 0.18 },
+    { kind: "bong", size: 0.32, clearance: 0.19 },
+    { kind: "underwear", size: 0.26, clearance: 0.18 },
+  ]);
+  const corners = shuffleArray(cornerSlots).slice(0, decorKinds.length);
+  const chosen = [];
+
+  decorKinds.forEach((decor, index) => {
+    const corner = corners[index];
+    const slot = {
+      ...decor,
+      ...corner,
+    };
+
+    chosen.push({
+      ...findClearCupTableDecorSlot(cups, slot, chosen),
+      jitter: Math.random() * Math.PI * 2,
+    });
+  });
+
+  return chosen;
+}
+
+function findClearCupTableDecorSlot(cups, slot, chosenDecor) {
+  if (isCupTableDecorSlotClear(cups, slot, chosenDecor)) {
+    return slot;
+  }
+
+  const edgeOffsets = [
+    [-0.04, 0],
+    [0.04, 0],
+    [0, -0.04],
+    [0, 0.04],
+    [-0.035, -0.035],
+    [0.035, -0.035],
+    [-0.035, 0.035],
+    [0.035, 0.035],
+  ];
+
+  for (const [offsetX, offsetY] of edgeOffsets) {
+    const candidate = {
+      ...slot,
+      x: Math.max(0.04, Math.min(0.96, slot.x + offsetX)),
+      y: Math.max(0.12, Math.min(0.9, slot.y + offsetY)),
+    };
+
+    if (isCupTableDecorSlotClear(cups, candidate, chosenDecor)) {
+      return candidate;
+    }
+  }
+
+  return slot;
+}
+
+function isCupTableDecorSlotClear(cups, slot, chosenDecor) {
+  const clearOfCups = cups.every((cup) => {
+    const distance = Math.hypot((cup.x - slot.x) * 1.08, (cup.y - slot.y) * 1.36);
+    return distance > slot.clearance;
+  });
+  const clearOfDecor = chosenDecor.every((decor) => {
+    const distance = Math.hypot((decor.x - slot.x) * 1.08, (decor.y - slot.y) * 1.36);
+    return distance > (decor.clearance + slot.clearance) * 0.55;
+  });
+
+  return clearOfCups && clearOfDecor;
+}
+
+function startPhoneChallengePromptTest() {
+  const canvas = document.querySelector("#mini-game-canvas");
+
+  if (!canvas) {
+    return;
+  }
+
+  if (miniGameState.animationFrame) {
+    window.cancelAnimationFrame(miniGameState.animationFrame);
+  }
+
+  canvas.removeEventListener("pointerdown", handleMiniGamePress);
+  canvas.removeEventListener("pointermove", handleMiniGameAim);
+
+  const now = performance.now();
+  miniGameState.canvas = canvas;
+  miniGameState.context = canvas.getContext("2d");
+  miniGameState.status = "phoneDialogue";
+  miniGameState.isRunning = true;
+  miniGameState.lastFrameTime = now;
+  miniGameState.phoneDialogueStartedAt = now - PHONE_DIALOGUE_LINE_DRAW_MS - 700;
+  miniGameState.phoneDialogueLineIndex = PHONE_DIALOGUE_LINES.length - 1;
+  miniGameState.phoneDialogueLineStartedAt = now - PHONE_DIALOGUE_LINES[PHONE_DIALOGUE_LINES.length - 1].text.length * PHONE_DIALOGUE_TYPE_SPEED_MS - PHONE_DIALOGUE_HOLD_MS - 160;
+  miniGameState.phoneDialogueTypingActive = false;
+  miniGameState.phoneChallengePromptAt = now;
+  miniGameState.phoneChallengeAcceptedAt = 0;
+  miniGameState.phoneChallengeButton = null;
+  miniGameState.cupTableStartedAt = 0;
+  miniGameState.cupTableCups = [];
+  miniGameState.cupTableDecor = [];
+  miniGameState.cupTableJohnStartedAt = 0;
+  miniGameState.cupTableJohnLineIndex = 0;
+  miniGameState.cupTableJohnLineStartedAt = 0;
+  miniGameState.cupTableJohnTypingActive = false;
+  miniGameState.cupTableJohnButtons = null;
+  miniGameState.cupTableJohnAccepted = false;
+  loadingState.activeSurface = "miniGame";
+  showActiveSurface();
+  resizeMiniGameCanvas();
+  loadMiniGameWizardSprite();
+  loadJohnCharacterImage();
+  unlockGameAudio();
+
+  canvas.addEventListener("pointerdown", handleMiniGamePress);
+  canvas.addEventListener("pointermove", handleMiniGameAim);
+  miniGameState.animationFrame = window.requestAnimationFrame(updateMiniGame);
 }
 
 function startPostGamePhone(timestamp, fromSkip = false) {
@@ -4737,6 +5752,7 @@ function drawMiniGame() {
   drawMiniGameWizardTipOverlay(context);
   drawPostGamePhone(context);
   drawPhoneDialogue(context);
+  drawCupTableScene(context);
   drawMiniGameHud(context);
   if (miniGameState.status === "playing") {
     drawLevelMessages(context);
@@ -4981,7 +5997,8 @@ function getMiniGameGameplayOpacity() {
     miniGameState.status === "phoneTransition" ||
     miniGameState.status === "phone" ||
     miniGameState.status === "phoneDialogue" ||
-    miniGameState.status === "phoneDone"
+    miniGameState.status === "phoneDone" ||
+    miniGameState.status === "cupTable"
   ) {
     return 0;
   }
@@ -5326,6 +6343,1538 @@ function drawPhoneChallengePrompt(context) {
   context.restore();
 }
 
+function drawCupTableScene(context) {
+  if (miniGameState.status !== "cupTable") {
+    return;
+  }
+
+  const now = performance.now();
+  const age = now - (miniGameState.cupTableStartedAt || now);
+  const fadeProgress = Math.min(Math.max((age - CUP_TABLE_SCENE_DELAY_MS) / CUP_TABLE_SCENE_FADE_MS, 0), 1);
+
+  context.save();
+  context.fillStyle = "#000000";
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  context.restore();
+
+  if (fadeProgress <= 0) {
+    return;
+  }
+
+  if (miniGameState.cupTablePhase === "skippedBlack") {
+    return;
+  }
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const tableCenterX = width / 2;
+  const tableCenterY = height * 0.51;
+  const tableRadiusX = Math.min(width * 0.43, height * 0.72);
+  const tableRadiusY = Math.min(height * 0.42, width * 0.28);
+
+  context.save();
+  context.globalAlpha = fadeProgress;
+  applyScreenShake(context);
+  applyCupTableSelectionZoom(context, now);
+  drawCupTableLegs(context, tableCenterX, tableCenterY, tableRadiusX, tableRadiusY);
+  drawCupTableTop(context, tableCenterX, tableCenterY, tableRadiusX, tableRadiusY);
+  drawCupTableDecor(context, tableCenterX, tableCenterY, tableRadiusX, tableRadiusY, now, miniGameState.cupTableDecor);
+  miniGameState.cupTableCupHitBoxes = [];
+  miniGameState.cupTableCups.forEach((cup) => {
+    drawCupOnTable(context, cup, tableCenterX, tableCenterY, tableRadiusX, tableRadiusY, now);
+  });
+  drawCupTablePickPrompt(context, now);
+  drawCupTableCupChoiceUi(context, now);
+  drawCupTablePourAnimation(context, tableCenterX, tableCenterY, tableRadiusX, tableRadiusY, now);
+  drawCupTablePostPourDialogue(context, now);
+  drawCupTableRetryIntro(context, now);
+  drawCupTableDrinkChoiceUi(context, now);
+  drawCupTableJohnTurnUi(context, now);
+  drawCupTableDrinkAnimation(context, tableCenterX, tableCenterY, tableRadiusX, tableRadiusY, now);
+  drawCupTableJohnDrink(context, tableCenterX, tableCenterY, tableRadiusX, tableRadiusY, now);
+  drawCupTableDrinkResult(context, now);
+  drawCupTableFailOverlay(context, now);
+  drawCupTableJohnResult(context, now);
+  drawCupTableJohnTutorial(context, now);
+  context.restore();
+}
+
+function drawCupTableJohnTutorial(context, now) {
+  if (
+    !miniGameState.cupTableJohnStartedAt ||
+    miniGameState.cupTablePhase === "selecting" ||
+    miniGameState.cupTablePhase === "selectionDone" ||
+    miniGameState.cupTablePhase === "pickPrompt" ||
+    miniGameState.cupTablePhase === "chooseCup" ||
+    miniGameState.cupTablePhase === "pouring" ||
+    miniGameState.cupTablePhase === "postPourDialogue" ||
+    miniGameState.cupTablePhase === "retryIntro" ||
+    miniGameState.cupTablePhase === "drinkChoice" ||
+    miniGameState.cupTablePhase === "johnTurn" ||
+    miniGameState.cupTablePhase === "johnDrinking" ||
+    miniGameState.cupTablePhase === "drinking" ||
+    miniGameState.cupTablePhase === "drinkResult" ||
+    miniGameState.cupTablePhase === "failed" ||
+    miniGameState.cupTablePhase === "johnLost" ||
+    miniGameState.cupTablePhase === "johnWon" ||
+    miniGameState.cupTablePhase === "skippedBlack"
+  ) {
+    miniGameState.cupTableJohnButtons = null;
+    return;
+  }
+
+  const introAge = now - miniGameState.cupTableJohnStartedAt;
+  const introProgress = Math.min(introAge / 420, 1);
+  const easedIntro = 1 - Math.pow(1 - introProgress, 3);
+  const johnImage = loadJohnCharacterImage();
+  const johnHeight = Math.max(210, Math.min(window.innerHeight * 0.84, 360));
+  const johnWidth =
+    johnImage.complete && johnImage.naturalWidth > 0
+      ? johnHeight * (johnImage.naturalWidth / johnImage.naturalHeight)
+      : johnHeight * 0.72;
+  const johnX = -johnWidth * 0.18 - (1 - easedIntro) * 80;
+  const johnY = window.innerHeight - johnHeight * 0.72;
+
+  context.save();
+  context.globalAlpha *= easedIntro;
+
+  if (johnImage.complete && johnImage.naturalWidth > 0) {
+    context.imageSmoothingEnabled = false;
+    context.shadowColor = "rgba(255, 170, 80, 0.32)";
+    context.shadowBlur = 16;
+    context.drawImage(johnImage, johnX, johnY, johnWidth, johnHeight);
+  } else {
+    drawFallbackCupTableJohn(context, johnX + johnWidth / 2, johnY + johnHeight * 0.42, johnHeight * 0.42);
+  }
+
+  drawCupTableJohnBubble(context, johnX + johnWidth * 0.64, Math.max(14, window.innerHeight * 0.08), now);
+  context.restore();
+}
+
+function drawCupTableSelectionJohnPeeks(context, now) {
+  if (miniGameState.cupTablePhase !== "selecting" || !miniGameState.cupTableSelectionStartedAt) {
+    return;
+  }
+
+  const age = now - miniGameState.cupTableSelectionStartedAt;
+  miniGameState.cupTableSelectionPeeks.forEach((peek) => {
+    const peekAge = age - peek.startedAtOffset;
+
+    if (peekAge < 0 || peekAge > CUP_TABLE_SELECTION_PEEK_MS) {
+      return;
+    }
+
+    drawCupTableAngledJohnPeek(context, peek, peekAge);
+  });
+}
+
+function drawCupTableAngledJohnPeek(context, peek, peekAge) {
+  const progress = peekAge / CUP_TABLE_SELECTION_PEEK_MS;
+  const enter = Math.min(progress / 0.22, 1);
+  const exit = Math.min(Math.max((progress - 0.72) / 0.28, 0), 1);
+  const visibility = Math.max(0, Math.min(1 - Math.pow(exit, 2), 1 - Math.pow(1 - enter, 3)));
+  const johnImage = loadJohnCharacterImage();
+  const size = Math.max(120, Math.min(190, window.innerHeight * 0.42));
+  const center = getCupTablePeekPosition(peek.edge, peek.offset, size, visibility);
+
+  context.save();
+  context.globalAlpha *= visibility;
+  context.translate(center.x, center.y);
+  context.rotate(center.rotation);
+  context.imageSmoothingEnabled = false;
+  context.shadowColor = "rgba(255, 170, 80, 0.36)";
+  context.shadowBlur = 14;
+
+  if (johnImage.complete && johnImage.naturalWidth > 0) {
+    const width = size * (johnImage.naturalWidth / johnImage.naturalHeight);
+    context.drawImage(johnImage, -width / 2, -size * 0.46, width, size);
+  } else {
+    drawFallbackCupTableJohn(context, 0, 0, size * 0.42);
+  }
+
+  context.restore();
+
+  drawCupTablePeekBubble(context, peek.text, center, visibility);
+}
+
+function getCupTablePeekPosition(edge, offset, size, visibility) {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const slide = (1 - visibility) * size * 0.45;
+
+  if (edge === "top") {
+    return {
+      x: width * offset,
+      y: -size * 0.18 + slide,
+      rotation: Math.PI,
+      bubbleX: width * offset + size * 0.15,
+      bubbleY: size * 0.14,
+    };
+  }
+
+  if (edge === "bottom") {
+    return {
+      x: width * offset,
+      y: height + size * 0.14 - slide,
+      rotation: 0,
+      bubbleX: width * offset - size * 1.15,
+      bubbleY: height - size * 0.44,
+    };
+  }
+
+  if (edge === "left") {
+    return {
+      x: -size * 0.18 + slide,
+      y: height * offset,
+      rotation: Math.PI / 2,
+      bubbleX: size * 0.42,
+      bubbleY: height * offset - size * 0.42,
+    };
+  }
+
+  return {
+    x: width + size * 0.18 - slide,
+    y: height * offset,
+    rotation: -Math.PI / 2,
+    bubbleX: width - size * 1.95,
+    bubbleY: height * offset - size * 0.42,
+  };
+}
+
+function drawCupTablePeekBubble(context, text, center, visibility) {
+  const bubbleWidth = Math.min(230, window.innerWidth * 0.34);
+  const bubbleHeight = Math.max(46, Math.min(62, window.innerHeight * 0.14));
+  const bubbleX = Math.max(10, Math.min(center.bubbleX, window.innerWidth - bubbleWidth - 10));
+  const bubbleY = Math.max(10, Math.min(center.bubbleY, window.innerHeight - bubbleHeight - 10));
+
+  context.save();
+  context.globalAlpha *= visibility;
+  context.fillStyle = "rgba(24, 12, 4, 0.94)";
+  context.strokeStyle = "rgba(255, 190, 92, 0.82)";
+  context.shadowColor = "rgba(255, 170, 80, 0.34)";
+  context.shadowBlur = 10;
+  context.lineWidth = 2;
+  context.fillRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+  context.strokeRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffffff";
+  context.font = `900 ${Math.max(10, Math.min(14, window.innerHeight * 0.036))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  wrapCanvasText(context, text, bubbleWidth - 18).slice(0, 2).forEach((line, index, lines) => {
+    const lineHeight = Math.max(12, Math.min(16, window.innerHeight * 0.038));
+    context.fillText(line, bubbleX + bubbleWidth / 2, bubbleY + bubbleHeight / 2 - ((lines.length - 1) * lineHeight) / 2 + index * lineHeight);
+  });
+  context.restore();
+}
+
+function drawCupTablePickPrompt(context, now) {
+  if (miniGameState.cupTablePhase !== "pickPrompt") {
+    miniGameState.cupTableDrinkButtons = null;
+    return;
+  }
+
+  const age = now - miniGameState.cupTablePickPromptStartedAt;
+  const johnIntro = Math.min(age / 420, 1);
+  const typeDuration = CUP_TABLE_PICK_PROMPT_LINE.length * CUP_TABLE_JOHN_TYPE_SPEED_MS;
+  const johnShouldShow = age < typeDuration + 1100;
+  const optionsShouldShow = age > typeDuration + 850;
+
+  if (johnShouldShow) {
+    drawCupTablePickPromptJohn(context, now, johnIntro);
+  }
+
+  if (optionsShouldShow) {
+    drawCupTableDrinkOptions(context, now, Math.min((age - typeDuration - 850) / 360, 1));
+  } else {
+    miniGameState.cupTableDrinkButtons = null;
+  }
+}
+
+function drawCupTablePickPromptJohn(context, now, introProgress) {
+  const johnImage = loadJohnCharacterImage();
+  const easedIntro = 1 - Math.pow(1 - introProgress, 3);
+  const johnHeight = Math.max(210, Math.min(window.innerHeight * 0.84, 360));
+  const johnWidth =
+    johnImage.complete && johnImage.naturalWidth > 0
+      ? johnHeight * (johnImage.naturalWidth / johnImage.naturalHeight)
+      : johnHeight * 0.72;
+  const johnX = -johnWidth * 0.18 - (1 - easedIntro) * 80;
+  const johnY = window.innerHeight - johnHeight * 0.72;
+  const lineAge = now - miniGameState.cupTablePickPromptStartedAt;
+  const typedCharacters = Math.min(CUP_TABLE_PICK_PROMPT_LINE.length, Math.floor(lineAge / CUP_TABLE_JOHN_TYPE_SPEED_MS));
+
+  if (typedCharacters < CUP_TABLE_PICK_PROMPT_LINE.length && !miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = startTypingSound();
+  }
+
+  if (typedCharacters >= CUP_TABLE_PICK_PROMPT_LINE.length && miniGameState.cupTableJohnTypingActive) {
+    miniGameState.cupTableJohnTypingActive = false;
+    stopTypingSound();
+  }
+
+  context.save();
+  context.globalAlpha *= easedIntro;
+  context.imageSmoothingEnabled = false;
+  context.shadowColor = "rgba(255, 170, 80, 0.32)";
+  context.shadowBlur = 16;
+  if (johnImage.complete && johnImage.naturalWidth > 0) {
+    context.drawImage(johnImage, johnX, johnY, johnWidth, johnHeight);
+  } else {
+    drawFallbackCupTableJohn(context, johnX + johnWidth / 2, johnY + johnHeight * 0.42, johnHeight * 0.42);
+  }
+  drawSimpleCupTableDialogueBubble(
+    context,
+    johnX + johnWidth * 0.64,
+    Math.max(14, window.innerHeight * 0.08),
+    CUP_TABLE_PICK_PROMPT_LINE.slice(0, typedCharacters),
+    typedCharacters < CUP_TABLE_PICK_PROMPT_LINE.length
+  );
+  context.restore();
+}
+
+function drawCupTableCupChoiceUi(context) {
+  if (miniGameState.cupTablePhase !== "chooseCup") {
+    miniGameState.cupTableConfirmButton = null;
+    return;
+  }
+
+  const blink = 0.35 + (Math.sin(performance.now() / 280) + 1) * 0.2;
+  context.save();
+  context.globalAlpha *= blink;
+  context.fillStyle = "#ffffff";
+  context.shadowColor = "rgba(255, 255, 255, 0.55)";
+  context.shadowBlur = 10;
+  context.font = `900 ${Math.max(14, Math.min(22, window.innerHeight * 0.054))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "top";
+  context.fillText("Click a cup to select", window.innerWidth / 2, Math.max(12, window.innerHeight * 0.035));
+  context.restore();
+
+  if (miniGameState.cupTableSelectedCupIndex < 0) {
+    miniGameState.cupTableConfirmButton = null;
+    return;
+  }
+
+  const buttonWidth = Math.min(190, window.innerWidth * 0.26);
+  const buttonHeight = Math.max(38, Math.min(52, window.innerHeight * 0.12));
+  const button = {
+    x: window.innerWidth / 2 - buttonWidth / 2,
+    y: window.innerHeight - buttonHeight - 14,
+    width: buttonWidth,
+    height: buttonHeight,
+  };
+
+  miniGameState.cupTableConfirmButton = button;
+  drawCupTableOptionButton(context, button, "Select", "#19a947", "#ffffff");
+}
+
+function drawCupTablePourAnimation(context, tableX, tableY, tableRadiusX, tableRadiusY, now) {
+  if (miniGameState.cupTablePhase !== "pouring" || miniGameState.cupTableSelectedCupIndex < 0) {
+    return;
+  }
+
+  const cup = miniGameState.cupTableCups[miniGameState.cupTableSelectedCupIndex];
+
+  if (!cup) {
+    return;
+  }
+
+  const age = now - miniGameState.cupTablePourStartedAt;
+  const progress = Math.min(age / CUP_TABLE_POUR_MS, 1);
+  const cupPosition = getCupTableCupScreenPosition(cup, tableX, tableY, tableRadiusX, tableRadiusY);
+  const startX = window.innerWidth + 90;
+  const startY = window.innerHeight * 0.18;
+  const holdProgress = Math.min(Math.max((progress - 0.18) / 0.52, 0), 1);
+  const exitProgress = Math.min(Math.max((progress - 0.76) / 0.24, 0), 1);
+  const arriveProgress = Math.min(progress / 0.32, 1);
+  const easedArrive = 1 - Math.pow(1 - arriveProgress, 3);
+  const flaskX = startX + (cupPosition.x + 54 - startX) * easedArrive + exitProgress * 180;
+  const flaskY = startY + (cupPosition.y - 58 - startY) * easedArrive - exitProgress * 70;
+  const pourAmount = holdProgress * (1 - exitProgress);
+  const rotation = -0.25 - pourAmount * 0.95 + exitProgress * 0.55;
+
+  context.save();
+  context.translate(flaskX, flaskY);
+  context.rotate(rotation);
+  drawCupTableFlask(context, cupPosition.width * 1.12, miniGameState.cupTablePourColor);
+  context.restore();
+
+  if (pourAmount > 0.05) {
+    drawCupTablePourStream(context, flaskX - 20, flaskY + 24, cupPosition.x, cupPosition.y - cupPosition.height * 0.18, pourAmount);
+  }
+}
+
+function drawCupTableFlask(context, size, liquidColor) {
+  context.save();
+  context.shadowColor = "rgba(255, 255, 255, 0.28)";
+  context.shadowBlur = 12;
+  context.strokeStyle = "rgba(235, 255, 255, 0.86)";
+  context.fillStyle = "rgba(210, 245, 255, 0.22)";
+  context.lineWidth = Math.max(2, size * 0.055);
+  context.beginPath();
+  context.moveTo(-size * 0.14, -size * 0.56);
+  context.lineTo(size * 0.14, -size * 0.56);
+  context.lineTo(size * 0.14, -size * 0.22);
+  context.quadraticCurveTo(size * 0.42, -size * 0.02, size * 0.32, size * 0.4);
+  context.quadraticCurveTo(0, size * 0.62, -size * 0.32, size * 0.4);
+  context.quadraticCurveTo(-size * 0.42, -size * 0.02, -size * 0.14, -size * 0.22);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  context.fillStyle = liquidColor;
+  context.globalAlpha *= 0.78;
+  context.beginPath();
+  context.ellipse(0, size * 0.25, size * 0.26, size * 0.15, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.globalAlpha /= 0.78;
+  context.strokeStyle = "rgba(255, 255, 255, 0.42)";
+  context.lineWidth = Math.max(1, size * 0.025);
+  context.beginPath();
+  context.moveTo(-size * 0.1, -size * 0.44);
+  context.lineTo(-size * 0.08, size * 0.2);
+  context.stroke();
+  context.restore();
+}
+
+function drawCupTablePourStream(context, startX, startY, endX, endY, amount) {
+  const color = miniGameState.cupTablePourColor || getRandomCupTablePourColor();
+
+  context.save();
+  context.strokeStyle = color;
+  context.shadowColor = color;
+  context.shadowBlur = 12;
+  context.lineWidth = Math.max(3, window.innerHeight * 0.01) * amount;
+  context.lineCap = "round";
+  context.beginPath();
+  context.moveTo(startX, startY);
+  context.quadraticCurveTo((startX + endX) / 2 - 12, (startY + endY) / 2 + 24, endX, endY);
+  context.stroke();
+
+  for (let index = 0; index < 5; index += 1) {
+    const t = (performance.now() / 240 + index * 0.19) % 1;
+    const dropX = startX + (endX - startX) * t + Math.sin(index * 2.1) * 5;
+    const dropY = startY + (endY - startY) * t + Math.sin(t * Math.PI) * 18;
+    context.fillStyle = color;
+    context.beginPath();
+    context.arc(dropX, dropY, 2.2 + amount * 1.6, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  context.restore();
+}
+
+function drawCupTablePostPourDialogue(context, now) {
+  if (miniGameState.cupTablePhase !== "postPourDialogue") {
+    return;
+  }
+
+  const lines = getCupTablePostPourLines();
+  const line = lines[miniGameState.cupTablePostPourLineIndex];
+
+  if (!line) {
+    return;
+  }
+
+  const age = now - miniGameState.cupTablePostPourDialogueStartedAt;
+  const lineAge = now - miniGameState.cupTablePostPourLineStartedAt;
+  const typedCharacters = Math.min(line.text.length, Math.floor(lineAge / CUP_TABLE_POST_POUR_TYPE_SPEED_MS));
+  const text = line.text.slice(0, typedCharacters);
+  const intro = Math.min(age / 420, 1);
+  const easedIntro = 1 - Math.pow(1 - intro, 3);
+  const johnImage = loadJohnCharacterImage();
+  const wizardImage = loadMiniGameWizardSprite();
+  const characterHeight = Math.max(210, Math.min(window.innerHeight * 0.82, 350));
+  const johnWidth = johnImage.complete && johnImage.naturalWidth > 0 ? characterHeight * (johnImage.naturalWidth / johnImage.naturalHeight) : characterHeight * 0.72;
+  const wizardWidth = characterHeight * (543 / 724);
+  const johnX = -johnWidth * 0.18;
+  const wizardX = window.innerWidth - wizardWidth * 0.82;
+  const y = window.innerHeight - characterHeight * 0.72;
+
+  context.save();
+  context.globalAlpha *= easedIntro;
+  context.imageSmoothingEnabled = false;
+  context.shadowBlur = 16;
+
+  context.shadowColor = "rgba(255, 170, 80, 0.32)";
+  if (johnImage.complete && johnImage.naturalWidth > 0) {
+    context.drawImage(johnImage, johnX, y, johnWidth, characterHeight);
+  }
+
+  context.shadowColor = "rgba(92, 255, 146, 0.32)";
+  if (miniGameState.cupTablePostPourLineIndex >= 1 && wizardImage.complete && wizardImage.naturalWidth > 0) {
+    context.drawImage(wizardImage, 0, 0, 543, 724, wizardX, y, wizardWidth, characterHeight);
+  }
+
+  if (line.speaker === "john") {
+    drawSimpleCupTableDialogueBubble(context, johnX + johnWidth * 0.64, Math.max(14, window.innerHeight * 0.08), text, typedCharacters < line.text.length, "SCATTY JOHN");
+  } else {
+    drawSimpleCupTableDialogueBubble(context, Math.max(16, wizardX - Math.min(380, window.innerWidth * 0.5) + 34), Math.max(14, window.innerHeight * 0.08), text, typedCharacters < line.text.length, "RETRO WIZ");
+  }
+
+  if (typedCharacters >= line.text.length) {
+    drawCupTableContinuePrompt(context, window.innerWidth / 2, window.innerHeight - 28, now);
+  }
+
+  context.restore();
+}
+
+function drawCupTableRetryIntro(context, now) {
+  if (miniGameState.cupTablePhase !== "retryIntro") {
+    return;
+  }
+
+  const text = "come back for more ay?";
+  const age = now - miniGameState.cupTableRetryIntroStartedAt;
+  const typedCharacters = Math.min(text.length, Math.floor(age / CUP_TABLE_RETRY_INTRO_TYPE_SPEED_MS));
+  const johnImage = loadJohnCharacterImage();
+  const johnHeight = Math.max(210, Math.min(window.innerHeight * 0.84, 360));
+  const johnWidth =
+    johnImage.complete && johnImage.naturalWidth > 0
+      ? johnHeight * (johnImage.naturalWidth / johnImage.naturalHeight)
+      : johnHeight * 0.72;
+  const johnX = -johnWidth * 0.18;
+  const johnY = window.innerHeight - johnHeight * 0.72;
+
+  context.save();
+  context.imageSmoothingEnabled = false;
+  context.shadowColor = "rgba(255, 170, 80, 0.32)";
+  context.shadowBlur = 16;
+
+  if (johnImage.complete && johnImage.naturalWidth > 0) {
+    context.drawImage(johnImage, johnX, johnY, johnWidth, johnHeight);
+  } else {
+    drawFallbackCupTableJohn(context, johnX + johnWidth / 2, johnY + johnHeight * 0.42, johnHeight * 0.42);
+  }
+
+  drawSimpleCupTableDialogueBubble(
+    context,
+    johnX + johnWidth * 0.64,
+    Math.max(14, window.innerHeight * 0.08),
+    text.slice(0, typedCharacters),
+    typedCharacters < text.length,
+    "SCATTY JOHN"
+  );
+  context.restore();
+}
+
+function drawCupTableContinuePrompt(context, x, y, now) {
+  const blink = 0.28 + (Math.sin(now / 300) + 1) * 0.18;
+
+  context.save();
+  context.globalAlpha *= blink;
+  context.fillStyle = "#ffffff";
+  context.font = `bold ${Math.max(10, Math.min(14, window.innerHeight * 0.036))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("click to continue", x, y);
+  context.restore();
+}
+
+function drawCupTableDrinkChoiceUi(context, now) {
+  if (miniGameState.cupTablePhase !== "drinkChoice") {
+    miniGameState.cupTableDrinkConfirmButton = null;
+    return;
+  }
+
+  const age = now - miniGameState.cupTableDrinkChoiceStartedAt;
+  const remainingSeconds = Math.max(0, Math.ceil((CUP_TABLE_DRINK_CHOICE_MS - age) / 1000));
+  const timerWidth = Math.min(160, window.innerWidth * 0.22);
+  const timerHeight = Math.max(36, Math.min(50, window.innerHeight * 0.11));
+  const timerX = window.innerWidth / 2 - timerWidth / 2;
+  const timerY = Math.max(10, window.innerHeight * 0.03);
+  const blink = 0.38 + (Math.sin(now / 260) + 1) * 0.22;
+
+  context.save();
+  context.fillStyle = "rgba(0, 0, 0, 0.78)";
+  context.strokeStyle = "rgba(255, 255, 255, 0.72)";
+  context.shadowColor = "rgba(255, 255, 255, 0.28)";
+  context.shadowBlur = 10;
+  context.lineWidth = 2;
+  context.fillRect(timerX, timerY, timerWidth, timerHeight);
+  context.strokeRect(timerX, timerY, timerWidth, timerHeight);
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffffff";
+  context.font = `900 ${Math.max(18, Math.min(30, window.innerHeight * 0.07))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(String(remainingSeconds), window.innerWidth / 2, timerY + timerHeight / 2 + 1);
+
+  context.globalAlpha *= blink;
+  context.font = `900 ${Math.max(13, Math.min(20, window.innerHeight * 0.048))}px 'Courier New', monospace`;
+  const promptY =
+    miniGameState.cupTableDrinkSelectedCupIndex >= 0 ? window.innerHeight - 96 : window.innerHeight - 54;
+  context.fillText("Select a cup to drink from", window.innerWidth / 2, promptY);
+  context.restore();
+
+  if (miniGameState.cupTableDrinkSelectedCupIndex < 0) {
+    miniGameState.cupTableDrinkConfirmButton = null;
+    return;
+  }
+
+  const buttonWidth = Math.min(190, window.innerWidth * 0.26);
+  const buttonHeight = Math.max(38, Math.min(52, window.innerHeight * 0.12));
+  const button = {
+    x: window.innerWidth / 2 - buttonWidth / 2,
+    y: window.innerHeight - buttonHeight - 10,
+    width: buttonWidth,
+    height: buttonHeight,
+  };
+
+  miniGameState.cupTableDrinkConfirmButton = button;
+  drawCupTableOptionButton(context, button, "Select", "#19a947", "#ffffff");
+}
+
+function drawCupTableJohnTurnUi(context, now) {
+  if (miniGameState.cupTablePhase !== "johnTurn" && miniGameState.cupTablePhase !== "johnDrinking") {
+    return;
+  }
+
+  context.save();
+  context.fillStyle = "#ffffff";
+  context.shadowColor = "rgba(255, 255, 255, 0.4)";
+  context.shadowBlur = 12;
+  context.font = `900 ${Math.max(16, Math.min(26, window.innerHeight * 0.062))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "top";
+  context.fillText("SCATTY JOHN'S TURN", window.innerWidth / 2, Math.max(12, window.innerHeight * 0.035));
+  context.restore();
+}
+
+function drawCupTableDrinkAnimation(context, tableX, tableY, tableRadiusX, tableRadiusY, now) {
+  if (miniGameState.cupTablePhase !== "drinking" || miniGameState.cupTableDrinkSelectedCupIndex < 0) {
+    return;
+  }
+
+  const cup = miniGameState.cupTableCups[miniGameState.cupTableDrinkSelectedCupIndex];
+
+  if (!cup) {
+    return;
+  }
+
+  const age = now - miniGameState.cupTableDrinkStartedAt;
+  const progress = Math.min(age / CUP_TABLE_DRINK_ANIMATION_MS, 1);
+  const cupPosition = getCupTableCupScreenPosition(cup, tableX, tableY, tableRadiusX, tableRadiusY);
+  const lift = Math.min(progress / 0.34, 1);
+  const drink = Math.min(Math.max((progress - 0.34) / 0.38, 0), 1);
+  const lower = Math.min(Math.max((progress - 0.72) / 0.28, 0), 1);
+  const easedLift = 1 - Math.pow(1 - lift, 3);
+  const easedLower = lower * lower * (3 - lower * 2);
+  const targetX = window.innerWidth / 2;
+  const targetY = window.innerHeight * 0.36;
+  const cupX = cupPosition.x + (targetX - cupPosition.x) * easedLift;
+  const cupY = cupPosition.y + (targetY - cupPosition.y) * easedLift + easedLower * window.innerHeight * 0.46;
+  const scale = 1 + easedLift * 2.3 - easedLower * 0.8;
+  const rotation = -0.08 + drink * 1.05 - easedLower * 0.5;
+  const alpha = 1 - Math.max(0, progress - 0.88) / 0.12;
+
+  context.save();
+  context.globalAlpha *= alpha;
+  context.translate(cupX, cupY);
+  context.rotate(rotation);
+  drawCupTableLargeCup(context, cupPosition.width * scale, cupPosition.height * scale, cup.liquid);
+  context.restore();
+
+  if (drink > 0.05 && lower < 0.4) {
+    drawCupTableDrinkPour(context, cupX + cupPosition.width * scale * 0.28, cupY, cup.liquid, drink);
+  }
+}
+
+function drawCupTableLargeCup(context, cupWidth, cupHeight, liquidColor) {
+  context.save();
+  context.shadowColor = "rgba(0, 0, 0, 0.42)";
+  context.shadowBlur = 12;
+  context.fillStyle = "rgba(245, 238, 216, 0.96)";
+  context.beginPath();
+  context.moveTo(-cupWidth * 0.42, -cupHeight * 0.16);
+  context.lineTo(cupWidth * 0.42, -cupHeight * 0.16);
+  context.lineTo(cupWidth * 0.33, cupHeight * 0.48);
+  context.quadraticCurveTo(0, cupHeight * 0.65, -cupWidth * 0.33, cupHeight * 0.48);
+  context.closePath();
+  context.fill();
+
+  context.shadowBlur = 0;
+  context.fillStyle = "rgba(190, 170, 132, 0.38)";
+  context.beginPath();
+  context.ellipse(0, -cupHeight * 0.16, cupWidth * 0.47, cupWidth * 0.2, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = liquidColor;
+  context.shadowColor = liquidColor;
+  context.shadowBlur = 14;
+  context.beginPath();
+  context.ellipse(0, -cupHeight * 0.18, cupWidth * 0.34, cupWidth * 0.12, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.shadowBlur = 0;
+  context.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  context.lineWidth = Math.max(2, cupWidth * 0.04);
+  context.beginPath();
+  context.moveTo(-cupWidth * 0.18, -cupHeight * 0.02);
+  context.lineTo(-cupWidth * 0.12, cupHeight * 0.36);
+  context.stroke();
+  context.restore();
+}
+
+function drawCupTableDrinkPour(context, startX, startY, color, amount) {
+  const endX = window.innerWidth / 2;
+  const endY = window.innerHeight + 30;
+
+  context.save();
+  context.strokeStyle = color;
+  context.shadowColor = color;
+  context.shadowBlur = 18;
+  context.lineCap = "round";
+  context.lineWidth = Math.max(7, window.innerHeight * 0.018) * amount;
+  context.beginPath();
+  context.moveTo(startX, startY);
+  context.quadraticCurveTo((startX + endX) / 2 + 24, window.innerHeight * 0.68, endX, endY);
+  context.stroke();
+
+  context.fillStyle = "rgba(0, 0, 0, 0.72)";
+  context.shadowBlur = 0;
+  context.beginPath();
+  context.ellipse(endX, window.innerHeight + 6, window.innerWidth * 0.18, window.innerHeight * 0.08, 0, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawCupTableJohnDrink(context, tableX, tableY, tableRadiusX, tableRadiusY, now) {
+  if (miniGameState.cupTablePhase !== "johnDrinking" || miniGameState.cupTableJohnSelectedCupIndex < 0) {
+    return;
+  }
+
+  const age = now - miniGameState.cupTableJohnDrinkStartedAt;
+  const progress = Math.min(age / CUP_TABLE_JOHN_DRINK_MS, 1);
+  const cup = miniGameState.cupTableCups[miniGameState.cupTableJohnSelectedCupIndex];
+  const johnImage = loadJohnCharacterImage();
+  const johnHeight = Math.max(220, Math.min(window.innerHeight * 0.86, 370));
+  const johnWidth =
+    johnImage.complete && johnImage.naturalWidth > 0
+      ? johnHeight * (johnImage.naturalWidth / johnImage.naturalHeight)
+      : johnHeight * 0.72;
+  const intro = Math.min(progress / 0.28, 1);
+  const exit = Math.min(Math.max((progress - 0.78) / 0.22, 0), 1);
+  const visibility = Math.max(0, Math.min(1 - exit, 1 - Math.pow(1 - intro, 3)));
+  const johnX = -johnWidth * 0.1 - (1 - visibility) * johnWidth * 0.42;
+  const johnY = window.innerHeight - johnHeight * 0.72;
+  const cupSize = Math.max(34, Math.min(58, window.innerHeight * 0.13));
+  const sipBob = Math.sin(progress * Math.PI * 6) * 3;
+
+  context.save();
+  context.globalAlpha *= visibility;
+  context.imageSmoothingEnabled = false;
+  context.shadowColor = "rgba(255, 170, 80, 0.32)";
+  context.shadowBlur = 16;
+
+  if (johnImage.complete && johnImage.naturalWidth > 0) {
+    context.drawImage(johnImage, johnX, johnY, johnWidth, johnHeight);
+  } else {
+    drawFallbackCupTableJohn(context, johnX + johnWidth / 2, johnY + johnHeight * 0.42, johnHeight * 0.42);
+  }
+
+  context.translate(johnX + johnWidth * 0.63, johnY + johnHeight * 0.4 + sipBob);
+  context.rotate(-0.18 - Math.sin(progress * Math.PI) * 0.36);
+  drawCupTableLargeCup(context, cupSize, cupSize * 1.15, cup ? cup.liquid : "#ffffff");
+  context.restore();
+
+  drawCupTableJohnTurnUi(context, now);
+}
+
+function drawCupTableDrinkResult(context, now) {
+  if (miniGameState.cupTablePhase !== "drinkResult" || !miniGameState.cupTableDrinkFailed) {
+    return;
+  }
+
+  const age = now - miniGameState.cupTableDrinkResultAt;
+  const fade = Math.min(age / 360, 1);
+
+  context.save();
+  context.globalAlpha *= fade;
+  context.fillStyle = "rgba(0, 0, 0, 0.28)";
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  context.fillStyle = "#ff1f2f";
+  context.shadowColor = "rgba(255, 31, 47, 0.82)";
+  context.shadowBlur = 22;
+  context.font = `900 ${Math.max(42, Math.min(88, window.innerHeight * 0.21))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("FAILED", window.innerWidth / 2, window.innerHeight / 2);
+  context.restore();
+}
+
+function drawCupTableFailOverlay(context, now) {
+  if (miniGameState.cupTablePhase !== "failed") {
+    miniGameState.cupTableFailButtons = null;
+    return;
+  }
+
+  const age = now - miniGameState.cupTableFailedAt;
+  const blackOpacity = Math.min(age / CUP_TABLE_FAIL_FADE_MS, 1);
+  const textOpacity = Math.min(Math.max((age - 220) / 360, 0), 1);
+  const buttonsOpacity = Math.min(Math.max((age - 1250) / 360, 0), 1);
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2 - 28;
+  const failedSize = Math.max(44, Math.min(86, window.innerHeight * 0.2));
+
+  context.save();
+  context.fillStyle = `rgba(0, 0, 0, ${blackOpacity})`;
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+  context.globalAlpha = textOpacity;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.shadowColor = "rgba(255, 64, 64, 0.78)";
+  context.shadowBlur = 22;
+  context.fillStyle = "#ff3030";
+  context.font = `900 ${failedSize}px 'Courier New', monospace`;
+  context.fillText("Failed", centerX, centerY);
+
+  if (buttonsOpacity > 0) {
+    const buttonWidth = Math.min(146, window.innerWidth * 0.26);
+    const buttonHeight = Math.max(36, Math.min(48, window.innerHeight * 0.11));
+    const gap = 16;
+    const y = centerY + failedSize * 0.86;
+    const retry = {
+      x: centerX - buttonWidth - gap / 2,
+      y: y - buttonHeight / 2,
+      width: buttonWidth,
+      height: buttonHeight,
+    };
+    const skip = {
+      x: centerX + gap / 2,
+      y: y - buttonHeight / 2,
+      width: buttonWidth,
+      height: buttonHeight,
+      disabled: false,
+    };
+
+    miniGameState.cupTableFailButtons = { retry, skip };
+    context.globalAlpha = buttonsOpacity;
+    drawFailedButton(context, retry, "Retry");
+    drawFailedButton(context, skip, "Skip level");
+  } else {
+    miniGameState.cupTableFailButtons = null;
+  }
+
+  context.restore();
+}
+
+function drawCupTableJohnResult(context, now) {
+  if (miniGameState.cupTablePhase !== "johnLost" && miniGameState.cupTablePhase !== "johnWon") {
+    return;
+  }
+
+  context.save();
+  context.fillStyle = "rgba(0, 0, 0, 0.42)";
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  context.fillStyle = miniGameState.cupTablePhase === "johnLost" ? "#7cff7c" : "#ff3030";
+  context.shadowColor = miniGameState.cupTablePhase === "johnLost" ? "rgba(80, 255, 130, 0.78)" : "rgba(255, 48, 48, 0.78)";
+  context.shadowBlur = 22;
+  context.font = `900 ${Math.max(34, Math.min(72, window.innerHeight * 0.16))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(
+    miniGameState.cupTablePhase === "johnLost" ? "JOHN DRANK YOUR CUP" : "JOHN WINS",
+    window.innerWidth / 2,
+    window.innerHeight / 2
+  );
+  context.restore();
+}
+
+function getCupTableCupScreenPosition(cup, tableX, tableY, tableRadiusX, tableRadiusY) {
+  const perspective = 0.82 + cup.y * 0.28;
+  const width = Math.max(21, Math.min(36, window.innerHeight * 0.082)) * perspective;
+  const height = width * 1.15;
+
+  return {
+    x: tableX + (cup.x - 0.5) * tableRadiusX * 1.58,
+    y: tableY + (cup.y - 0.5) * tableRadiusY * 1.45,
+    width,
+    height,
+  };
+}
+
+function getDrinkColor(drink) {
+  const colors = {
+    Rio: "#ff7a4f",
+    Rubicon: "#ffb13b",
+    Monster: "#72ff4f",
+    "Red Bull": "#60a6ff",
+    Fanta: "#ff8c28",
+    "Fanta Lemon": "#f7e24a",
+    Coke: "#552114",
+    "Diet Coke": "#d7e2ea",
+  };
+
+  return colors[drink] || "#ffffff";
+}
+
+function getRandomCupTablePourColor() {
+  const colors = ["#ff4fc8", "#f7e24a", "#9b62ff", "#43e66d", "#40d8ff", "#ff8c33"];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function applyCupTableSelectionZoom(context, now) {
+  let zoom = 1;
+
+  if (miniGameState.cupTablePhase === "selecting" && miniGameState.cupTableSelectionStartedAt) {
+    const age = now - miniGameState.cupTableSelectionStartedAt;
+    const progress = Math.min(age / CUP_TABLE_SELECTION_DURATION_MS, 1);
+    zoom = 1 + Math.pow(progress, 1.35) * 0.105;
+  }
+
+  if (miniGameState.cupTableSelectionFlashAt) {
+    const flashAge = now - miniGameState.cupTableSelectionFlashAt;
+
+    if (flashAge < CUP_TABLE_SELECTION_FINAL_FLASH_MS) {
+      const flashProgress = flashAge / CUP_TABLE_SELECTION_FINAL_FLASH_MS;
+      zoom = 1.105 - flashProgress * 0.105;
+    }
+  }
+
+  if (Math.abs(zoom - 1) < 0.001) {
+    return;
+  }
+
+  context.translate(window.innerWidth / 2, window.innerHeight / 2);
+  context.scale(zoom, zoom);
+  context.translate(-window.innerWidth / 2, -window.innerHeight / 2);
+}
+
+function drawFallbackCupTableJohn(context, x, y, size) {
+  context.save();
+  context.translate(x, y);
+  context.fillStyle = "#a6632e";
+  context.fillRect(-size * 0.32, -size * 0.16, size * 0.64, size * 0.68);
+  context.fillStyle = "#f4ad59";
+  context.fillRect(-size * 0.22, -size * 0.46, size * 0.44, size * 0.36);
+  context.fillStyle = "#67b7e8";
+  context.fillRect(-size * 0.32, -size * 0.66, size * 0.64, size * 0.22);
+  context.fillStyle = "#ff5dc8";
+  context.fillRect(-size * 0.15, -size * 0.33, size * 0.09, size * 0.09);
+  context.fillRect(size * 0.08, -size * 0.33, size * 0.09, size * 0.09);
+  context.restore();
+}
+
+function drawCupTableJohnBubble(context, x, y, now) {
+  const isFinalLine = miniGameState.cupTablePhase === "finalLine";
+  const line = isFinalLine ? CUP_TABLE_JOHN_FINAL_LINE : CUP_TABLE_JOHN_LINES[miniGameState.cupTableJohnLineIndex];
+  const isComplete = !isFinalLine && miniGameState.cupTableJohnLineIndex >= CUP_TABLE_JOHN_LINES.length - 1 && line;
+  const lineStartedAt = isFinalLine ? miniGameState.cupTableJohnFinalStartedAt : miniGameState.cupTableJohnLineStartedAt;
+  const lineAge = now - lineStartedAt;
+  const typedCharacters = line ? Math.min(line.length, Math.floor(lineAge / CUP_TABLE_JOHN_TYPE_SPEED_MS)) : 0;
+  const visibleText = line ? line.slice(0, typedCharacters) : "";
+  const bubbleWidth = Math.min(380, window.innerWidth * 0.5);
+  const bubbleHeight = Math.max(96, Math.min(142, window.innerHeight * 0.36));
+  const bubbleX = Math.max(16, Math.min(x, window.innerWidth - bubbleWidth - 16));
+  const bubbleY = y;
+
+  context.save();
+  context.fillStyle = "rgba(24, 12, 4, 0.93)";
+  context.strokeStyle = "rgba(255, 190, 92, 0.82)";
+  context.shadowColor = "rgba(255, 170, 80, 0.34)";
+  context.shadowBlur = 12;
+  context.lineWidth = 2;
+  context.fillRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+  context.strokeRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffbd5f";
+  context.font = `900 ${Math.max(10, Math.min(13, window.innerHeight * 0.034))}px 'Courier New', monospace`;
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  context.fillText("SCATTY JOHN", bubbleX + 12, bubbleY + 9);
+
+  context.fillStyle = "#ffffff";
+  context.font = `bold ${Math.max(10, Math.min(14, window.innerHeight * 0.038))}px 'Courier New', monospace`;
+  const lines = wrapCanvasText(context, visibleText, bubbleWidth - 24);
+  const lineHeight = Math.max(14, Math.min(18, window.innerHeight * 0.044));
+
+  lines.slice(0, 5).forEach((textLine, index) => {
+    context.fillText(textLine, bubbleX + 12, bubbleY + 31 + index * lineHeight);
+  });
+
+  if (line && typedCharacters < line.length) {
+    const cursorLine = Math.min(lines.length - 1, 4);
+    const cursorText = lines[cursorLine] || "";
+    context.fillStyle = Math.floor(now / 180) % 2 ? "#ffffff" : "rgba(255, 255, 255, 0.25)";
+    context.fillRect(bubbleX + 12 + context.measureText(cursorText).width + 3, bubbleY + 33 + cursorLine * lineHeight, 7, lineHeight - 4);
+  }
+
+  if (!isFinalLine && line && typedCharacters >= line.length && !isComplete) {
+    const blink = 0.32 + (Math.sin(now / 260) + 1) * 0.09;
+    context.fillStyle = `rgba(255, 255, 255, ${blink})`;
+    context.font = `900 ${Math.max(8, Math.min(11, window.innerHeight * 0.028))}px 'Courier New', monospace`;
+    context.textAlign = "right";
+    context.fillText("click to continue", bubbleX + bubbleWidth - 12, bubbleY + bubbleHeight - 18);
+  }
+
+  if (
+    isComplete &&
+    !miniGameState.cupTableJohnAccepted &&
+    typedCharacters >= line.length &&
+    lineAge > line.length * CUP_TABLE_JOHN_TYPE_SPEED_MS + 500
+  ) {
+    drawCupTableJohnOptions(context, bubbleX, bubbleY + bubbleHeight + 10, bubbleWidth);
+  } else {
+    miniGameState.cupTableJohnButtons = null;
+  }
+
+  context.restore();
+}
+
+function drawSimpleCupTableDialogueBubble(context, x, y, text, showCursor = false, speaker = "SCATTY JOHN") {
+  const bubbleWidth = Math.min(380, window.innerWidth * 0.5);
+  const bubbleHeight = Math.max(76, Math.min(108, window.innerHeight * 0.28));
+  const bubbleX = Math.max(16, Math.min(x, window.innerWidth - bubbleWidth - 16));
+  const bubbleY = y;
+
+  context.save();
+  context.fillStyle = "rgba(24, 12, 4, 0.93)";
+  context.strokeStyle = "rgba(255, 190, 92, 0.82)";
+  context.shadowColor = "rgba(255, 170, 80, 0.34)";
+  context.shadowBlur = 12;
+  context.lineWidth = 2;
+  context.fillRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+  context.strokeRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffbd5f";
+  context.font = `900 ${Math.max(10, Math.min(13, window.innerHeight * 0.034))}px 'Courier New', monospace`;
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  context.fillText(speaker, bubbleX + 12, bubbleY + 9);
+
+  context.fillStyle = "#ffffff";
+  context.font = `bold ${Math.max(10, Math.min(14, window.innerHeight * 0.038))}px 'Courier New', monospace`;
+  const lines = wrapCanvasText(context, text, bubbleWidth - 24);
+  const lineHeight = Math.max(14, Math.min(18, window.innerHeight * 0.044));
+  lines.slice(0, 4).forEach((line, index) => {
+    context.fillText(line, bubbleX + 12, bubbleY + 31 + index * lineHeight);
+  });
+
+  if (showCursor) {
+    const cursorLine = Math.min(lines.length - 1, 3);
+    const cursorText = lines[cursorLine] || "";
+    context.fillStyle = Math.floor(performance.now() / 180) % 2 ? "#ffffff" : "rgba(255, 255, 255, 0.25)";
+    context.fillRect(bubbleX + 12 + context.measureText(cursorText).width + 3, bubbleY + 33 + cursorLine * lineHeight, 7, lineHeight - 4);
+  }
+
+  context.restore();
+}
+
+function drawCupTableDrinkOptions(context, now, fadeProgress) {
+  const panelWidth = Math.min(window.innerWidth * 0.52, 440);
+  const panelHeight = Math.min(window.innerHeight * 0.58, 250);
+  const panelX = window.innerWidth / 2 - panelWidth / 2;
+  const panelY = window.innerHeight / 2 - panelHeight / 2;
+  const buttonGap = 10;
+  const buttonHeight = Math.max(34, Math.min(46, window.innerHeight * 0.105));
+  const buttonWidth = (panelWidth - 42 - buttonGap) / 2;
+  const startY = panelY + 76;
+
+  context.save();
+  context.globalAlpha *= Math.max(0, Math.min(fadeProgress, 1));
+  context.fillStyle = "rgba(8, 12, 8, 0.94)";
+  context.strokeStyle = "rgba(156, 255, 156, 0.72)";
+  context.shadowColor = "rgba(80, 255, 130, 0.28)";
+  context.shadowBlur = 16;
+  context.lineWidth = 2;
+  context.fillRect(panelX, panelY, panelWidth, panelHeight);
+  context.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffffff";
+  context.font = `900 ${Math.max(14, Math.min(20, window.innerHeight * 0.052))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("Pick what to put into the cup", panelX + panelWidth / 2, panelY + 38);
+
+  miniGameState.cupTableDrinkButtons = miniGameState.cupTableDrinkOptions.map((option, index) => {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    const button = {
+      x: panelX + 21 + column * (buttonWidth + buttonGap),
+      y: startY + row * (buttonHeight + buttonGap),
+      width: buttonWidth,
+      height: buttonHeight,
+      label: option,
+    };
+
+    drawCupTableOptionButton(context, button, option, "#185c34", "#ffffff");
+    return button;
+  });
+
+  context.restore();
+}
+
+function drawCupTableJohnOptions(context, x, y, width) {
+  const gap = 8;
+  const buttonHeight = Math.max(34, Math.min(46, window.innerHeight * 0.105));
+  const buttonWidth = (width - gap) / 2;
+  const accept = { x, y, width: buttonWidth, height: buttonHeight };
+  const repeat = { x: x + buttonWidth + gap, y, width: buttonWidth, height: buttonHeight };
+
+  miniGameState.cupTableJohnButtons = { accept, repeat };
+  drawCupTableOptionButton(context, accept, "Makes Sense", "#19a947", "#ffffff");
+  drawCupTableOptionButton(context, repeat, "IQ of 40 read caveman rules again", "#8c1f24", "#ffffff");
+}
+
+function drawCupTableOptionButton(context, rect, label, fill, textColor) {
+  context.save();
+  context.fillStyle = fill;
+  context.strokeStyle = fill === "#19a947" ? "#9cff9c" : "rgba(255, 132, 132, 0.82)";
+  context.shadowColor = fill === "#19a947" ? "rgba(80, 255, 130, 0.36)" : "rgba(255, 68, 68, 0.34)";
+  context.shadowBlur = 10;
+  context.lineWidth = 2;
+  context.fillRect(rect.x, rect.y, rect.width, rect.height);
+  context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+
+  context.shadowBlur = 0;
+  context.fillStyle = textColor;
+  context.font = `900 ${Math.max(8, Math.min(12, window.innerHeight * 0.032))}px 'Courier New', monospace`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  const lines = wrapCanvasText(context, label, rect.width - 12);
+  const lineHeight = Math.max(10, Math.min(13, window.innerHeight * 0.032));
+  const startY = rect.y + rect.height / 2 - ((lines.length - 1) * lineHeight) / 2;
+  lines.slice(0, 2).forEach((line, index) => {
+    context.fillText(line, rect.x + rect.width / 2, startY + index * lineHeight);
+  });
+  context.restore();
+}
+
+function drawCupTableLegs(context, x, y, radiusX, radiusY) {
+  const legPositions = [
+    [-0.58, 0.58],
+    [0.58, 0.58],
+    [-0.38, 0.83],
+    [0.38, 0.83],
+  ];
+
+  context.save();
+  legPositions.forEach(([offsetX, offsetY], index) => {
+    const legX = x + radiusX * offsetX;
+    const legTop = y + radiusY * offsetY;
+    const legHeight = radiusY * (index < 2 ? 0.48 : 0.62);
+    const legWidth = Math.max(11, radiusX * 0.04);
+    const gradient = context.createLinearGradient(legX - legWidth, legTop, legX + legWidth, legTop + legHeight);
+    gradient.addColorStop(0, "#6e3a1e");
+    gradient.addColorStop(0.45, "#3d1d10");
+    gradient.addColorStop(1, "#160a06");
+
+    context.fillStyle = gradient;
+    context.shadowColor = "rgba(0, 0, 0, 0.72)";
+    context.shadowBlur = 12;
+    context.shadowOffsetY = 8;
+    context.beginPath();
+    context.moveTo(legX - legWidth * 0.58, legTop);
+    context.lineTo(legX + legWidth * 0.58, legTop);
+    context.lineTo(legX + legWidth * 0.35, legTop + legHeight);
+    context.lineTo(legX - legWidth * 0.35, legTop + legHeight);
+    context.closePath();
+    context.fill();
+  });
+  context.restore();
+}
+
+function drawCupTableTop(context, x, y, radiusX, radiusY) {
+  const tableGradient = context.createRadialGradient(
+    x - radiusX * 0.18,
+    y - radiusY * 0.22,
+    radiusY * 0.1,
+    x,
+    y,
+    radiusX
+  );
+  tableGradient.addColorStop(0, "#9a6237");
+  tableGradient.addColorStop(0.58, "#6f3f22");
+  tableGradient.addColorStop(1, "#3a1d11");
+
+  context.save();
+  context.shadowColor = "rgba(0, 0, 0, 0.72)";
+  context.shadowBlur = 34;
+  context.shadowOffsetY = 18;
+  context.fillStyle = "#2b130b";
+  context.beginPath();
+  context.ellipse(x, y + radiusY * 0.16, radiusX * 1.01, radiusY * 1.02, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.shadowBlur = 0;
+  context.shadowOffsetY = 0;
+  context.fillStyle = tableGradient;
+  context.beginPath();
+  context.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = "rgba(255, 206, 128, 0.22)";
+  context.lineWidth = Math.max(4, Math.min(8, radiusY * 0.035));
+  context.stroke();
+
+  context.strokeStyle = "rgba(37, 16, 8, 0.34)";
+  context.lineWidth = 2;
+  for (let index = 0; index < 9; index += 1) {
+    const offset = (index - 4) * radiusX * 0.18;
+    context.beginPath();
+    context.ellipse(x + offset, y, radiusX * 0.12, radiusY * 0.96, 0.08 * Math.sin(index), -Math.PI / 2, Math.PI / 2);
+    context.stroke();
+  }
+
+  context.restore();
+}
+
+function drawCupTableDecor(context, tableX, tableY, tableRadiusX, tableRadiusY, now, decorItems) {
+  decorItems.forEach((decor) => {
+    const x = tableX + (decor.x - 0.5) * tableRadiusX * 1.72;
+    const y = tableY + (decor.y - 0.5) * tableRadiusY * 1.5;
+    const size = tableRadiusY * decor.size;
+
+    if (decor.kind === "pan") {
+      drawCupTablePanEgg(context, x, y, size, now);
+    } else if (decor.kind === "bong") {
+      drawCupTableBong(context, x, y, size, now);
+    } else if (decor.kind === "underwear") {
+      drawCupTableUnderwear(context, x, y, size, now);
+    }
+  });
+}
+
+function drawCupTablePanEgg(context, x, y, size, now) {
+  context.save();
+  context.translate(x, y);
+  context.rotate(-0.22);
+  context.shadowColor = "rgba(0, 0, 0, 0.48)";
+  context.shadowBlur = 10;
+  context.shadowOffsetY = 5;
+
+  context.fillStyle = "#1b1b1f";
+  context.beginPath();
+  context.ellipse(0, 0, size * 0.72, size * 0.42, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = "#111114";
+  context.fillRect(size * 0.52, -size * 0.08, size * 0.72, size * 0.16);
+
+  context.shadowBlur = 0;
+  context.fillStyle = "#f9f4dc";
+  context.beginPath();
+  context.ellipse(-size * 0.08, -size * 0.03, size * 0.34, size * 0.22, -0.15, 0, Math.PI * 2);
+  context.ellipse(size * 0.12, size * 0.03, size * 0.28, size * 0.2, 0.25, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = "#ffbf32";
+  context.beginPath();
+  context.arc(size * 0.02, -size * 0.01, size * 0.12, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = "rgba(255, 235, 145, 0.68)";
+  context.lineWidth = Math.max(1, size * 0.025);
+  for (let index = 0; index < 5; index += 1) {
+    const sizzleAge = (now / 260 + index * 0.7) % 1;
+    const startX = -size * 0.34 + index * size * 0.16;
+    const startY = -size * 0.28 + Math.sin(now / 130 + index) * size * 0.025;
+    context.globalAlpha = 0.45 * (1 - sizzleAge);
+    context.beginPath();
+    context.moveTo(startX, startY);
+    context.quadraticCurveTo(
+      startX + size * 0.06,
+      startY - size * (0.08 + sizzleAge * 0.14),
+      startX + size * 0.13,
+      startY - size * (0.02 + sizzleAge * 0.2)
+    );
+    context.stroke();
+  }
+
+  context.globalAlpha = 1;
+  for (let index = 0; index < 4; index += 1) {
+    const smokeAge = (now / 1700 + index * 0.22) % 1;
+    const smokeX = -size * 0.18 + index * size * 0.13 + Math.sin(now / 480 + index) * size * 0.035;
+    const smokeY = -size * (0.36 + smokeAge * 0.6);
+    context.fillStyle = `rgba(220, 235, 210, ${0.28 * (1 - smokeAge)})`;
+    context.beginPath();
+    context.ellipse(smokeX, smokeY, size * (0.05 + smokeAge * 0.08), size * (0.025 + smokeAge * 0.05), 0.45, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  context.strokeStyle = "rgba(255, 255, 255, 0.22)";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.ellipse(0, 0, size * 0.72, size * 0.42, 0, Math.PI * 0.95, Math.PI * 1.72);
+  context.stroke();
+  context.restore();
+}
+
+function drawCupTableBong(context, x, y, size, now) {
+  const bubble = 0.55 + Math.sin(now / 520) * 0.18;
+  const isSelectionActive = miniGameState.cupTablePhase === "selecting";
+
+  context.save();
+  context.translate(x, y);
+  context.shadowColor = "rgba(64, 216, 255, 0.32)";
+  context.shadowBlur = 12;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  context.fillStyle = "rgba(48, 190, 210, 0.32)";
+  context.strokeStyle = "rgba(205, 255, 255, 0.78)";
+  context.lineWidth = Math.max(2, size * 0.045);
+  context.beginPath();
+  context.moveTo(-size * 0.16, size * 0.38);
+  context.quadraticCurveTo(-size * 0.32, size * 0.12, -size * 0.1, -size * 0.02);
+  context.lineTo(-size * 0.06, -size * 0.58);
+  context.lineTo(size * 0.12, -size * 0.58);
+  context.lineTo(size * 0.14, -size * 0.02);
+  context.quadraticCurveTo(size * 0.34, size * 0.14, size * 0.16, size * 0.38);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  context.strokeStyle = "rgba(126, 255, 154, 0.72)";
+  context.beginPath();
+  context.moveTo(size * 0.12, size * 0.08);
+  context.lineTo(size * 0.5, -size * 0.12);
+  context.stroke();
+
+  context.fillStyle = "#24421d";
+  context.beginPath();
+  context.ellipse(size * 0.54, -size * 0.15, size * 0.12, size * 0.07, -0.25, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = `rgba(165, 255, 210, ${bubble})`;
+  context.beginPath();
+  context.ellipse(size * 0.02, size * 0.24, size * 0.18, size * 0.08, 0, 0, Math.PI * 2);
+  context.fill();
+
+  if (isSelectionActive) {
+    drawCupTableBongSmoke(context, size, now);
+  }
+
+  context.restore();
+}
+
+function drawCupTableBongSmoke(context, size, now) {
+  const selectionAge = now - (miniGameState.cupTableSelectionStartedAt || now);
+  const smokeBuild = Math.min(selectionAge / 2200, 1);
+
+  context.save();
+  context.shadowBlur = 0;
+  for (let index = 0; index < 7; index += 1) {
+    const smokeAge = (now / 2300 + index * 0.14) % 1;
+    const drift = Math.sin(now / 520 + index * 1.8) * size * (0.08 + smokeAge * 0.1);
+    const smokeX = size * 0.03 + drift;
+    const smokeY = -size * (0.68 + smokeAge * 0.86);
+    const smokeSize = size * (0.06 + smokeAge * 0.12);
+    const alpha = smokeBuild * 0.34 * (1 - smokeAge);
+
+    context.fillStyle = `rgba(225, 245, 230, ${alpha})`;
+    context.beginPath();
+    context.ellipse(smokeX, smokeY, smokeSize, smokeSize * 0.46, 0.35 + smokeAge, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.restore();
+}
+
+function drawCupTableUnderwear(context, x, y, size, now) {
+  const sway = Math.sin(now / 700) * 0.035;
+
+  context.save();
+  context.translate(x, y);
+  context.rotate(sway);
+  context.shadowColor = "rgba(0, 0, 0, 0.44)";
+  context.shadowBlur = 9;
+  context.shadowOffsetY = 5;
+
+  context.fillStyle = "#f6f0ff";
+  context.strokeStyle = "#ff63c8";
+  context.lineWidth = Math.max(2, size * 0.06);
+  context.beginPath();
+  context.moveTo(-size * 0.52, -size * 0.08);
+  context.quadraticCurveTo(-size * 0.3, size * 0.34, -size * 0.04, size * 0.18);
+  context.quadraticCurveTo(0, size * 0.06, size * 0.04, size * 0.18);
+  context.quadraticCurveTo(size * 0.32, size * 0.34, size * 0.52, -size * 0.08);
+  context.lineTo(size * 0.34, -size * 0.22);
+  context.quadraticCurveTo(0, -size * 0.08, -size * 0.34, -size * 0.22);
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  context.shadowBlur = 0;
+  context.strokeStyle = "rgba(255, 99, 200, 0.72)";
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(-size * 0.05, -size * 0.05);
+  context.lineTo(-size * 0.05, size * 0.16);
+  context.stroke();
+
+  context.restore();
+}
+
+function drawCupOnTable(context, cup, tableX, tableY, tableRadiusX, tableRadiusY, now) {
+  if (cup.removed || (miniGameState.cupTablePhase === "drinking" && miniGameState.cupTableDrinkSelectedCupIndex === miniGameState.cupTableCups.indexOf(cup))) {
+    return;
+  }
+
+  const cupIndex = miniGameState.cupTableCups.indexOf(cup);
+  const cupPosition = getCupTableCupScreenPosition(cup, tableX, tableY, tableRadiusX, tableRadiusY);
+  const cupX = cupPosition.x;
+  const cupY = cupPosition.y;
+  const cupWidth = cupPosition.width;
+  const cupHeight = cupPosition.height;
+  const bob = Math.sin(now / 900 + cup.wobble) * 0.7;
+  const selectionAge = miniGameState.cupTableSelectionStartedAt
+    ? now - miniGameState.cupTableSelectionStartedAt
+    : 0;
+  const redProgress = Math.min(
+    Math.max((selectionAge - CUP_TABLE_SELECTION_RED_START_MS) / CUP_TABLE_SELECTION_RED_RAMP_MS, 0),
+    1
+  );
+  const isSelected = miniGameState.cupTablePhase === "selecting" && miniGameState.cupTableSelectionIndex === cupIndex;
+  const isPlayerSelectedCup =
+    (miniGameState.cupTablePhase === "chooseCup" || miniGameState.cupTablePhase === "pouring") &&
+    miniGameState.cupTableSelectedCupIndex === cupIndex;
+  const isPlayerOwnedDrinkCup =
+    (
+      miniGameState.cupTablePhase === "drinkChoice" ||
+      miniGameState.cupTablePhase === "drinking" ||
+      miniGameState.cupTablePhase === "johnTurn" ||
+      miniGameState.cupTablePhase === "johnDrinking"
+    ) &&
+    miniGameState.cupTableSelectedCupIndex === cupIndex;
+  const isDrinkSelectedCup =
+    (miniGameState.cupTablePhase === "drinkChoice" || miniGameState.cupTablePhase === "drinking") &&
+    miniGameState.cupTableDrinkSelectedCupIndex === cupIndex;
+  const isJohnSelectedCup =
+    (miniGameState.cupTablePhase === "johnTurn" || miniGameState.cupTablePhase === "johnDrinking") &&
+    (miniGameState.cupTableJohnTurnSelectionIndex === cupIndex || miniGameState.cupTableJohnSelectedCupIndex === cupIndex);
+  const finalFlashAge = miniGameState.cupTableSelectionFlashAt ? now - miniGameState.cupTableSelectionFlashAt : Infinity;
+  const finalFlashProgress =
+    finalFlashAge < CUP_TABLE_SELECTION_FINAL_FLASH_MS
+      ? 1 - finalFlashAge / CUP_TABLE_SELECTION_FINAL_FLASH_MS
+      : 0;
+  const highlightStrength = isSelected ? 1 : finalFlashProgress;
+  const whiteHighlight = highlightStrength * (1 - redProgress);
+  const redHighlight = Math.max(isSelected ? redProgress : 0, finalFlashProgress, isPlayerOwnedDrinkCup ? 1 : 0);
+  const greenHighlight = isPlayerSelectedCup || isDrinkSelectedCup || isJohnSelectedCup ? 1 : 0;
+
+  if (!(miniGameState.cupTablePhase === "drinkChoice" && cupIndex === miniGameState.cupTableSelectedCupIndex)) {
+    miniGameState.cupTableCupHitBoxes[cupIndex] = {
+      index: cupIndex,
+      x: cupX - cupWidth * 0.78,
+      y: cupY - cupHeight * 0.48,
+      width: cupWidth * 1.56,
+      height: cupHeight * 1.34,
+    };
+  }
+
+  context.save();
+  context.translate(cupX, cupY + bob);
+  context.rotate(cup.rotation || 0);
+  context.shadowColor = "rgba(0, 0, 0, 0.24)";
+  context.shadowBlur = 5;
+  context.shadowOffsetY = 3;
+  context.fillStyle = "rgba(8, 5, 3, 0.14)";
+  context.beginPath();
+  context.ellipse(0, cupHeight * 0.54, cupWidth * 0.55, cupWidth * 0.18, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.shadowBlur = 0;
+  context.shadowOffsetY = 0;
+  context.fillStyle = blendCupColor(
+    "rgba(238, 230, 204, 0.94)",
+    whiteHighlight,
+    redHighlight
+  );
+  context.beginPath();
+  context.moveTo(-cupWidth * 0.43, -cupHeight * 0.1);
+  context.lineTo(cupWidth * 0.43, -cupHeight * 0.1);
+  context.lineTo(cupWidth * 0.32, cupHeight * 0.45);
+  context.quadraticCurveTo(0, cupHeight * 0.58, -cupWidth * 0.32, cupHeight * 0.45);
+  context.closePath();
+  context.fill();
+
+  context.fillStyle = blendCupColor("rgba(173, 158, 126, 0.42)", whiteHighlight * 0.75, redHighlight * 0.7);
+  context.beginPath();
+  context.ellipse(0, -cupHeight * 0.1, cupWidth * 0.46, cupWidth * 0.22, 0, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = cup.liquid;
+  context.shadowColor = redHighlight > 0.05 ? "rgba(255, 40, 40, 0.85)" : cup.liquid;
+  context.shadowBlur = 8 + highlightStrength * 10;
+  context.beginPath();
+  context.ellipse(0, -cupHeight * 0.12, cupWidth * 0.34, cupWidth * 0.14, 0, 0, Math.PI * 2);
+  context.fill();
+
+  if (highlightStrength > 0 || greenHighlight > 0 || isPlayerOwnedDrinkCup) {
+    context.globalCompositeOperation = "source-atop";
+    context.fillStyle = `rgba(255, 255, 255, ${whiteHighlight * 0.34})`;
+    context.fillRect(-cupWidth * 0.55, -cupHeight * 0.26, cupWidth * 1.1, cupHeight * 0.98);
+    context.fillStyle = `rgba(255, 20, 20, ${redHighlight * 0.42})`;
+    context.fillRect(-cupWidth * 0.55, -cupHeight * 0.26, cupWidth * 1.1, cupHeight * 0.98);
+    context.fillStyle = `rgba(40, 255, 100, ${greenHighlight * 0.46})`;
+    context.fillRect(-cupWidth * 0.55, -cupHeight * 0.26, cupWidth * 1.1, cupHeight * 0.98);
+    context.globalCompositeOperation = "source-over";
+  }
+
+  context.shadowBlur = 0;
+  context.strokeStyle =
+    greenHighlight > 0
+      ? "rgba(90, 255, 120, 0.96)"
+      : redHighlight > 0.55
+      ? "rgba(255, 45, 45, 0.96)"
+      : highlightStrength > 0
+      ? `rgba(255, ${Math.round(255 * (1 - redProgress))}, ${Math.round(255 * (1 - redProgress))}, ${0.5 + highlightStrength * 0.35})`
+      : "rgba(255, 255, 255, 0.34)";
+  context.lineWidth = 1.5 + highlightStrength * 1.2 + greenHighlight * 1.5 + (redHighlight > 0.55 ? 1.2 : 0);
+  context.beginPath();
+  context.moveTo(-cupWidth * 0.24, -cupHeight * 0.02);
+  context.lineTo(-cupWidth * 0.18, cupHeight * 0.35);
+  context.stroke();
+
+  context.restore();
+
+  const USE_CUP_SELECTION_RING_HIGHLIGHT = false;
+  if (USE_CUP_SELECTION_RING_HIGHLIGHT && (isSelected || finalFlashProgress > 0)) {
+    drawCupSelectionHighlight(context, cupX, cupY + bob, cupWidth, cupHeight, redProgress, finalFlashProgress, now);
+  }
+}
+
+function blendCupColor(baseColor, whiteAmount, redAmount) {
+  if (redAmount > 0) {
+    return `rgba(255, ${Math.round(235 * (1 - redAmount))}, ${Math.round(220 * (1 - redAmount))}, 0.96)`;
+  }
+
+  if (whiteAmount > 0) {
+    return `rgba(255, 255, 255, ${0.86 + whiteAmount * 0.12})`;
+  }
+
+  return baseColor;
+}
+
+function drawCupSelectionHighlight(context, x, y, cupWidth, cupHeight, redProgress, finalFlashProgress, now) {
+  const pulse = 0.82 + Math.sin(now / 55) * 0.18;
+  const red = Math.round(255 * redProgress + 255 * (1 - redProgress));
+  const greenBlue = Math.round(255 * (1 - redProgress));
+  const alpha = Math.max(0.72 * pulse, finalFlashProgress * 0.92);
+  const ringScale = 1 + finalFlashProgress * 0.42;
+
+  context.save();
+  context.strokeStyle = `rgba(${red}, ${greenBlue}, ${greenBlue}, ${alpha})`;
+  context.fillStyle = `rgba(255, 0, 0, ${finalFlashProgress * 0.28})`;
+  context.shadowColor = `rgba(${red}, ${greenBlue}, ${greenBlue}, ${0.75})`;
+  context.shadowBlur = 16 + finalFlashProgress * 18;
+  context.lineWidth = Math.max(3, cupWidth * 0.12);
+  context.beginPath();
+  context.ellipse(x, y + cupHeight * 0.12, cupWidth * 0.82 * ringScale, cupHeight * 0.78 * ringScale, 0, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+  context.restore();
+}
+
 function loadRetroPhoneImage() {
   if (miniGameState.phoneImage) {
     return miniGameState.phoneImage;
@@ -5404,7 +7953,8 @@ function drawMiniGameHud(context) {
     miniGameState.status === "phoneTransition" ||
     miniGameState.status === "phone" ||
     miniGameState.status === "phoneDialogue" ||
-    miniGameState.status === "phoneDone"
+    miniGameState.status === "phoneDone" ||
+    miniGameState.status === "cupTable"
   ) {
     context.restore();
     return;
@@ -7067,6 +9617,11 @@ async function prepareLoadingScene() {
     }
 
     loadingState.sequenceStarted = true;
+
+    if (TEST_START_AT_PHONE_CHALLENGE) {
+      startPhoneChallengePromptTest();
+      return;
+    }
 
     if (TEST_START_AT_SKIP_LEVEL_FAIL) {
       startMiniGameAtLockedSkipFail();
