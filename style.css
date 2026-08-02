@@ -283,6 +283,62 @@ select {
   animation: opening-handheld-camera 1.36s ease-in-out infinite;
 }
 
+.opening-wizard.is-cup-returning {
+  animation: opening-cup-return-fade 900ms ease-out forwards;
+}
+
+.opening-wizard.is-speed-boosting {
+  animation: opening-speed-boost-shake 160ms linear infinite;
+}
+
+.opening-wizard.is-speed-boosting::before,
+.opening-wizard.is-speed-boosting::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+}
+
+.opening-wizard.is-speed-boosting::before {
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(145, 255, 172, 0.2), transparent 20%),
+    linear-gradient(90deg, rgba(134, 50, 255, 0.2), transparent 28%, transparent 72%, rgba(134, 50, 255, 0.2));
+  mix-blend-mode: screen;
+  animation: opening-speed-boost-purple 5.2s ease-in-out forwards;
+}
+
+.opening-wizard.is-speed-boosting::after {
+  background:
+    linear-gradient(86deg, transparent 0 8%, rgba(255, 255, 255, 0.82) 8.3% 9.2%, transparent 9.6% 100%),
+    linear-gradient(81deg, transparent 0 19%, rgba(235, 255, 255, 0.7) 19.2% 20%, transparent 20.5% 100%),
+    linear-gradient(76deg, transparent 0 31%, rgba(255, 255, 255, 0.65) 31.2% 31.9%, transparent 32.3% 100%),
+    linear-gradient(97deg, transparent 0 43%, rgba(255, 255, 255, 0.76) 43.2% 44%, transparent 44.4% 100%),
+    linear-gradient(103deg, transparent 0 57%, rgba(230, 255, 255, 0.58) 57.2% 58.1%, transparent 58.6% 100%),
+    linear-gradient(111deg, transparent 0 72%, rgba(255, 255, 255, 0.72) 72.2% 73%, transparent 73.5% 100%),
+    linear-gradient(118deg, transparent 0 86%, rgba(255, 255, 255, 0.65) 86.2% 87%, transparent 87.4% 100%);
+  background-position:
+    -24vw -20vh,
+    -10vw -12vh,
+    6vw -26vh,
+    18vw -10vh,
+    -16vw 12vh,
+    8vw 22vh,
+    25vw 7vh;
+  background-size:
+    150vw 32vh,
+    140vw 26vh,
+    155vw 30vh,
+    150vw 26vh,
+    145vw 28vh,
+    160vw 30vh,
+    150vw 26vh;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transform: scale(1);
+  animation: opening-speed-boost-streaks 5.2s ease-in-out forwards;
+}
+
 .opening-dialogue {
   position: absolute;
   z-index: 4;
@@ -323,6 +379,52 @@ select {
 .opening-dialogue.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+.opening-speed-boost {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(8px, 1.6vw, 18px);
+  padding: 0 0 5vh 2vw;
+  opacity: 0;
+  transform: translateX(-14vw);
+  transition: opacity 220ms ease, transform 260ms ease;
+  pointer-events: none;
+}
+
+.opening-speed-boost.is-visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.opening-speed-boost img {
+  width: clamp(128px, 19vw, 230px);
+  max-height: 78vh;
+  object-fit: contain;
+  object-position: bottom left;
+  image-rendering: pixelated;
+  filter:
+    drop-shadow(0 0 14px rgba(255, 170, 80, 0.38))
+    drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.72));
+}
+
+.opening-speed-boost__bubble {
+  width: min(43vw, 390px);
+  margin-top: clamp(24px, 9vh, 68px);
+  padding: clamp(0.62rem, 1.7vw, 0.95rem);
+  border: 2px solid rgba(255, 190, 92, 0.82);
+  background: rgba(24, 12, 4, 0.92);
+  box-shadow: 0 0 18px rgba(255, 170, 80, 0.28), inset 0 0 16px rgba(255, 190, 92, 0.07);
+  color: #ffffff;
+  font-family: "Courier New", Courier, monospace;
+  font-size: clamp(0.72rem, 2.1vw, 1rem);
+  font-weight: 800;
+  line-height: 1.25;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.28);
 }
 
 .opening-tap-bubble {
@@ -947,6 +1049,21 @@ select {
   animation: opening-big-firework-burst 14s ease-out 14s infinite;
 }
 
+.opening-wizard.is-speed-boosting .opening-forest__horizon,
+.opening-wizard.is-speed-boosting .opening-forest__party-lights,
+.opening-wizard.is-speed-boosting .opening-forest__fireworks,
+.opening-wizard.is-speed-boosting .opening-forest__big-fireworks {
+  animation: opening-speed-boost-horizon-loom 5.2s ease-in-out forwards;
+}
+
+.opening-wizard.is-boosted-close .opening-forest__horizon,
+.opening-wizard.is-boosted-close .opening-forest__party-lights,
+.opening-wizard.is-boosted-close .opening-forest__fireworks,
+.opening-wizard.is-boosted-close .opening-forest__big-fireworks {
+  transform: translateX(-50%) scale(1.62);
+  filter: saturate(1.22) hue-rotate(16deg) drop-shadow(0 0 15px rgba(178, 94, 255, 0.25));
+}
+
 .opening-forest__path {
   position: absolute;
   left: 50%;
@@ -964,6 +1081,11 @@ select {
 
 .opening-wizard.is-path-running .opening-forest__path {
   animation: opening-path-rush 0.72s linear infinite;
+}
+
+.opening-wizard.is-speed-boosting .opening-forest__path {
+  animation: opening-path-rush 0.16s linear infinite;
+  filter: drop-shadow(0 -8px 24px rgba(178, 94, 255, 0.28));
 }
 
 .opening-forest__speed-lines {
@@ -993,6 +1115,19 @@ select {
 
 .opening-wizard.is-path-running .opening-forest__speed-lines span {
   animation: opening-speed-line-rush 780ms linear var(--delay) infinite;
+}
+
+.opening-wizard.is-speed-boosting .opening-forest__speed-lines {
+  opacity: 1;
+  animation: none;
+}
+
+.opening-wizard.is-speed-boosting .opening-forest__speed-lines span {
+  width: 2px;
+  height: calc(var(--length) * 2.8);
+  background: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.86), rgba(188, 146, 255, 0.32), rgba(255, 255, 255, 0));
+  opacity: 0.9;
+  animation: opening-speed-line-rush 190ms linear var(--delay) infinite;
 }
 
 .opening-travel-hud {
@@ -1396,6 +1531,15 @@ select {
   animation: opening-forest-run-prop var(--run-duration) linear var(--run-delay) infinite;
 }
 
+.opening-wizard.is-speed-boosting .opening-forest__start-prop {
+  animation-duration: 1.05s !important;
+}
+
+.opening-wizard.is-speed-boosting .opening-forest__run-prop {
+  animation-duration: calc(var(--run-duration) * 0.18) !important;
+  filter: saturate(1.3) hue-rotate(28deg) drop-shadow(0 0 8px rgba(178, 94, 255, 0.2));
+}
+
 .opening-wizard__runner,
 .opening-wizard__idle,
 .opening-wizard__path-runner {
@@ -1459,6 +1603,15 @@ select {
   animation:
     menu-wizard-run-frames 0.72s step-end infinite,
     opening-path-camera-bob 1.12s ease-in-out infinite;
+}
+
+.opening-wizard.is-speed-boosting .opening-wizard__path-runner {
+  animation:
+    menu-wizard-run-frames 0.22s step-end infinite,
+    opening-path-camera-bob 0.28s ease-in-out infinite;
+  filter:
+    drop-shadow(0 0 22px rgba(178, 94, 255, 0.5))
+    drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.72));
 }
 
 .wizard-hologram {
@@ -2303,6 +2456,74 @@ select {
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes opening-cup-return-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes opening-speed-boost-shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  25% {
+    transform: translate3d(-0.55vw, 0.35vh, 0);
+  }
+
+  50% {
+    transform: translate3d(0.48vw, -0.28vh, 0);
+  }
+
+  75% {
+    transform: translate3d(-0.34vw, -0.22vh, 0);
+  }
+}
+
+@keyframes opening-speed-boost-purple {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  18%,
+  82% {
+    opacity: 0.86;
+  }
+}
+
+@keyframes opening-speed-boost-streaks {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+
+  18%,
+  82% {
+    opacity: 0.88;
+    transform: scale(1.24);
+  }
+}
+
+@keyframes opening-speed-boost-horizon-loom {
+  0% {
+    transform: translateX(-50%) scale(1);
+    filter: none;
+  }
+
+  72%,
+  100% {
+    transform: translateX(-50%) scale(1.62);
+    filter: saturate(1.35) hue-rotate(24deg) drop-shadow(0 0 18px rgba(178, 94, 255, 0.32));
   }
 }
 

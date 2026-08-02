@@ -134,6 +134,14 @@ const CUP_TABLE_JOHN_DRINK_MS = 1800;
 const CUP_TABLE_FAIL_FADE_MS = 900;
 const CUP_TABLE_RETRY_INTRO_TYPE_SPEED_MS = 22;
 const CUP_TABLE_RETRY_INTRO_HOLD_MS = 900;
+const CUP_TABLE_JOHN_WIN_BLACKOUT_MS = 2000;
+const CUP_TABLE_JOHN_WIN_TEXT_FADE_MS = 900;
+const CUP_TABLE_RETURN_FADE_MS = 900;
+const OPENING_SPEED_BOOST_DIALOGUE =
+  "ok bro here's your speed boost get here quick bc LIONS DEN IS BACK";
+const OPENING_SPEED_BOOST_TYPE_SPEED_MS = 20;
+const OPENING_SPEED_BOOST_HOLD_MS = 850;
+const OPENING_SPEED_BOOST_DURATION_MS = 5200;
 const MINI_GAME_BIG_GOBLIN_START_MS = 15000;
 const MINI_GAME_LEVEL_REQUIREMENTS = [0, 2, 3, 4, 5];
 const MINI_GAME_BOSS_HEALTH = 80;
@@ -165,7 +173,8 @@ const MINI_GAME_WIZARD_TIP_EXIT_MS = 760;
 const TEST_START_AT_TRANSMISSION = false;
 const TEST_START_AT_MINI_GAME_INTRO = false;
 const TEST_START_AT_SKIP_LEVEL_FAIL = false;
-const TEST_START_AT_PHONE_CHALLENGE = true;
+const TEST_START_AT_PHONE_CHALLENGE = false;
+const TEST_CUP_TABLE_FORCE_PLAYER_WIN = false;
 
 const PHONE_DIALOGUE_LINES = [
   { speaker: "wizard", text: "hello?" },
@@ -182,7 +191,7 @@ const PHONE_DIALOGUE_LINES = [
     speaker: "john",
     text: "thats the reason i was calling mate, saw this nitty gang of goblins and could recognise my boys stash from a mile away.",
   },
-  { speaker: "john", text: "they're being dickheads around hydro rn" },
+  { speaker: "john", text: "they're around hydro rn" },
   { speaker: "wizard", text: "fuck man, im on my way but still so far to go" },
   { speaker: "john", text: "you and your guy yeah beat me at this game and ill give you a fat speed boost" },
 ];
@@ -421,6 +430,9 @@ const miniGameState = {
   cupTableJohnSelectedCupIndex: -1,
   cupTableJohnDrinkStartedAt: 0,
   cupTableJohnLost: false,
+  cupTableJohnResultAt: 0,
+  cupTableReturnTriggered: false,
+  cupTableReturnTimer: null,
   johnImage: null,
   failedAt: 0,
   failedButtons: null,
@@ -1085,6 +1097,7 @@ function stopOpeningTapBubbleGame() {
   const bubbles = document.querySelectorAll(".opening-tap-bubble");
   const tutorial = document.querySelector("#opening-tap-tutorial");
   const openingWizard = document.querySelector("#opening-wizard");
+  const speedBoost = document.querySelector("#opening-speed-boost");
 
   if (loadingState.tapBubbleTimer) {
     window.clearTimeout(loadingState.tapBubbleTimer);
@@ -1114,7 +1127,14 @@ function stopOpeningTapBubbleGame() {
       "is-path-failed",
       "is-path-complete",
       "is-starting-game",
+      "is-speed-boosting",
+      "is-boosted-close",
     );
+  }
+
+  if (speedBoost) {
+    speedBoost.classList.remove("is-visible");
+    hideElement(speedBoost);
   }
 
   bubbles.forEach((bubble) => {
@@ -2200,7 +2220,7 @@ async function playOpeningWizardSequence() {
   openingWizard.classList.remove("is-path-running");
   openingWizard.classList.remove("is-mountain-exploding");
   openingWizard.classList.remove("is-travel-hud-active");
-  openingWizard.classList.remove("is-path-complete", "is-starting-game");
+  openingWizard.classList.remove("is-path-complete", "is-starting-game", "is-speed-boosting", "is-boosted-close", "is-cup-returning");
   openingForest.classList.remove("is-mountain-exploding");
   stopOpeningTapBubbleGame();
   stopOpeningMountainExplosionLoop();
@@ -2951,9 +2971,8 @@ function handleCupTablePress(point) {
     }
 
     if (isPointInsideRect(point, miniGameState.cupTableFailButtons.skip)) {
-      miniGameState.cupTablePhase = "skippedBlack";
+      startCupTablePathReturn(performance.now());
       miniGameState.cupTableFailButtons = null;
-      miniGameState.isRunning = false;
       playSoundEffect("menuStart", { minGap: 120, volume: 0.6 });
       return;
     }
@@ -3460,6 +3479,9 @@ function startCupTableScene(timestamp) {
   miniGameState.cupTableJohnSelectedCupIndex = -1;
   miniGameState.cupTableJohnDrinkStartedAt = 0;
   miniGameState.cupTableJohnLost = false;
+  miniGameState.cupTableJohnResultAt = 0;
+  miniGameState.cupTableReturnTriggered = false;
+  clearCupTableReturnTimer();
   miniGameState.phoneChallengeButton = null;
   miniGameState.phoneChallengePromptAt = 0;
   miniGameState.phoneChallengeAcceptedAt = 0;
@@ -3484,6 +3506,7 @@ function updateCupTableScene(timestamp) {
   updateCupTableDrinkAnimation(timestamp);
   updateCupTableJohnTurn(timestamp);
   updateCupTableJohnDrink(timestamp);
+  updateCupTableJohnResult(timestamp);
 }
 
 function restartCupTableJohnDialogue(timestamp) {
@@ -3882,6 +3905,8 @@ function startCupTableRetryRound(timestamp) {
   miniGameState.cupTableJohnTurnStartedAt = 0;
   miniGameState.cupTableJohnDrinkStartedAt = 0;
   miniGameState.cupTableJohnLost = false;
+  miniGameState.cupTableJohnResultAt = 0;
+  miniGameState.cupTableReturnTriggered = false;
   stopTypingSound();
 }
 
@@ -3940,7 +3965,10 @@ function updateCupTableJohnTurn(timestamp) {
   }
 
   if (age >= CUP_TABLE_JOHN_TURN_MS) {
-    const chosenIndex = availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
+    const chosenIndex =
+      TEST_CUP_TABLE_FORCE_PLAYER_WIN && miniGameState.cupTableSelectedCupIndex >= 0
+        ? miniGameState.cupTableSelectedCupIndex
+        : availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
     miniGameState.cupTableJohnSelectedCupIndex = chosenIndex;
     miniGameState.cupTableJohnTurnSelectionIndex = chosenIndex;
     miniGameState.cupTableJohnLost = chosenIndex === miniGameState.cupTableSelectedCupIndex;
@@ -3980,6 +4008,7 @@ function updateCupTableJohnDrink(timestamp) {
 
   if (miniGameState.cupTableJohnLost) {
     miniGameState.cupTablePhase = "johnLost";
+    scheduleCupTablePathReturn(timestamp);
     triggerScreenShake(850, 9);
     playSoundEffect("levelUp", { minGap: 100, volume: 0.7 });
     return;
@@ -3999,6 +4028,145 @@ function getCupTableAvailableDrinkIndexes(includeOwnCup = false) {
     .map((cup, index) => ({ cup, index }))
     .filter(({ cup, index }) => !cup.removed && (includeOwnCup || index !== miniGameState.cupTableSelectedCupIndex))
     .map(({ index }) => index);
+}
+
+function updateCupTableJohnResult(timestamp) {
+  if (
+    (miniGameState.cupTablePhase !== "johnLost" && miniGameState.cupTablePhase !== "pathReturn") ||
+    !miniGameState.cupTableJohnResultAt
+  ) {
+    return;
+  }
+
+  const age = timestamp - miniGameState.cupTableJohnResultAt;
+  const totalDuration = CUP_TABLE_JOHN_WIN_BLACKOUT_MS + CUP_TABLE_JOHN_WIN_TEXT_FADE_MS + CUP_TABLE_RETURN_FADE_MS;
+
+  if (age > totalDuration && !miniGameState.cupTableReturnTriggered) {
+    miniGameState.cupTableReturnTriggered = true;
+    resumeOpeningPathFromCupTable();
+  }
+}
+
+function startCupTablePathReturn(timestamp) {
+  miniGameState.cupTablePhase = "pathReturn";
+  scheduleCupTablePathReturn(timestamp);
+  miniGameState.cupTableFailButtons = null;
+  miniGameState.cupTableDrinkConfirmButton = null;
+  triggerScreenShake(260, 2);
+}
+
+function scheduleCupTablePathReturn(timestamp) {
+  if (miniGameState.cupTableReturnTimer || miniGameState.cupTableReturnTriggered) {
+    return;
+  }
+
+  miniGameState.cupTableJohnResultAt = timestamp;
+  miniGameState.cupTableReturnTriggered = false;
+  miniGameState.cupTableReturnTimer = window.setTimeout(() => {
+    if (!miniGameState.cupTableReturnTriggered) {
+      miniGameState.cupTableReturnTriggered = true;
+      resumeOpeningPathFromCupTable();
+    }
+  }, CUP_TABLE_JOHN_WIN_BLACKOUT_MS + CUP_TABLE_JOHN_WIN_TEXT_FADE_MS + CUP_TABLE_RETURN_FADE_MS);
+}
+
+function clearCupTableReturnTimer() {
+  if (miniGameState.cupTableReturnTimer) {
+    window.clearTimeout(miniGameState.cupTableReturnTimer);
+    miniGameState.cupTableReturnTimer = null;
+  }
+}
+
+function resumeOpeningPathFromCupTable() {
+  const loadingScene = document.querySelector('[data-scene="Loading"]');
+  const openingWizard = document.querySelector("#opening-wizard");
+  const openingForest = document.querySelector("#opening-forest");
+  const openingDialogue = document.querySelector("#opening-dialogue");
+
+  clearCupTableReturnTimer();
+
+  if (!loadingScene || !openingWizard || !openingForest) {
+    miniGameState.isRunning = false;
+    miniGameState.status = "phoneDone";
+    return;
+  }
+
+  buildOpeningForestScene();
+  hideOpeningBubbleOnly();
+  stopOpeningMountainExplosionLoop();
+
+  if (openingDialogue) {
+    openingDialogue.classList.remove("is-visible");
+    hideElement(openingDialogue);
+  }
+
+  loadingState.activeSurface = "openingWizard";
+  loadingState.travelDialogueRunId += 1;
+  loadingState.travelHudStarted = false;
+  loadingState.travelHudStartedAt = 0;
+  loadingState.travelDialogueStarted = false;
+  loadingState.pathChallengeActive = false;
+  loadingState.pathChallengeFailed = false;
+
+  openingWizard.classList.remove(
+    "is-active",
+    "is-path-failed",
+    "is-path-complete",
+    "is-starting-game",
+    "is-travel-hud-active",
+    "is-mountain-exploding",
+    "is-cup-returning",
+  );
+  openingForest.classList.remove("is-mountain-exploding");
+  loadingScene.classList.remove("is-ending");
+  showActiveSurface();
+  void openingWizard.offsetWidth;
+  openingWizard.classList.add("is-path-running", "is-cup-returning");
+  scheduleOpeningMountainExplosionLoop();
+
+  window.setTimeout(() => {
+    openingWizard.classList.remove("is-cup-returning");
+    playOpeningSpeedBoostSequence();
+  }, CUP_TABLE_RETURN_FADE_MS + 120);
+
+  miniGameState.status = "openingReturn";
+  miniGameState.isRunning = false;
+}
+
+async function playOpeningSpeedBoostSequence() {
+  const openingWizard = document.querySelector("#opening-wizard");
+  const boost = document.querySelector("#opening-speed-boost");
+  const boostText = document.querySelector("#opening-speed-boost-text");
+
+  if (!openingWizard || !boost || !boostText || !openingWizard.classList.contains("is-path-running")) {
+    return;
+  }
+
+  boostText.textContent = "";
+  showElement(boost);
+  window.requestAnimationFrame(() => boost.classList.add("is-visible"));
+  await waitWhileLandscape(180);
+
+  await typeWizardSpeech(boostText, OPENING_SPEED_BOOST_DIALOGUE, OPENING_SPEED_BOOST_TYPE_SPEED_MS);
+  await waitWhileLandscape(OPENING_SPEED_BOOST_HOLD_MS);
+
+  boost.classList.remove("is-visible");
+  await waitWhileLandscape(220);
+  hideElement(boost);
+
+  if (!openingWizard.classList.contains("is-path-running")) {
+    return;
+  }
+
+  openingWizard.classList.remove("is-speed-boosting");
+  void openingWizard.offsetWidth;
+  openingWizard.classList.add("is-speed-boosting");
+  triggerScreenShake(OPENING_SPEED_BOOST_DURATION_MS, 8);
+  playSoundEffect("levelUp", { minGap: 120, volume: 0.75 });
+
+  await waitWhileLandscape(OPENING_SPEED_BOOST_DURATION_MS);
+  openingWizard.classList.remove("is-speed-boosting");
+  openingWizard.classList.add("is-boosted-close");
 }
 
 function createCupTableCups() {
@@ -6394,6 +6562,7 @@ function drawCupTableScene(context) {
   drawCupTableJohnDrink(context, tableCenterX, tableCenterY, tableRadiusX, tableRadiusY, now);
   drawCupTableDrinkResult(context, now);
   drawCupTableFailOverlay(context, now);
+  drawCupTablePathReturnOverlay(context, now);
   drawCupTableJohnResult(context, now);
   drawCupTableJohnTutorial(context, now);
   context.restore();
@@ -6415,6 +6584,7 @@ function drawCupTableJohnTutorial(context, now) {
     miniGameState.cupTablePhase === "drinking" ||
     miniGameState.cupTablePhase === "drinkResult" ||
     miniGameState.cupTablePhase === "failed" ||
+    miniGameState.cupTablePhase === "pathReturn" ||
     miniGameState.cupTablePhase === "johnLost" ||
     miniGameState.cupTablePhase === "johnWon" ||
     miniGameState.cupTablePhase === "skippedBlack"
@@ -7164,22 +7334,50 @@ function drawCupTableFailOverlay(context, now) {
   context.restore();
 }
 
+function drawCupTablePathReturnOverlay(context, now) {
+  if (miniGameState.cupTablePhase !== "pathReturn") {
+    return;
+  }
+
+  const age = now - miniGameState.cupTableJohnResultAt;
+  const blackOpacity = Math.min(age / CUP_TABLE_FAIL_FADE_MS, 1);
+
+  context.save();
+  context.fillStyle = `rgba(0, 0, 0, ${blackOpacity})`;
+  context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  context.restore();
+}
+
 function drawCupTableJohnResult(context, now) {
   if (miniGameState.cupTablePhase !== "johnLost" && miniGameState.cupTablePhase !== "johnWon") {
     return;
   }
 
+  const isJohnLost = miniGameState.cupTablePhase === "johnLost";
+
+  if (isJohnLost && !miniGameState.cupTableJohnResultAt) {
+    scheduleCupTablePathReturn(now);
+  } else if (isJohnLost && !miniGameState.cupTableReturnTimer && !miniGameState.cupTableReturnTriggered) {
+    scheduleCupTablePathReturn(miniGameState.cupTableJohnResultAt);
+  }
+
+  const age = isJohnLost && miniGameState.cupTableJohnResultAt ? now - miniGameState.cupTableJohnResultAt : 0;
+  const blackOpacity = isJohnLost ? Math.min(age / CUP_TABLE_FAIL_FADE_MS, 1) : 0.42;
+  const textFadeAge = Math.max(0, age - CUP_TABLE_JOHN_WIN_BLACKOUT_MS);
+  const textOpacity = isJohnLost ? Math.max(0, 1 - textFadeAge / CUP_TABLE_JOHN_WIN_TEXT_FADE_MS) : 1;
+
   context.save();
-  context.fillStyle = "rgba(0, 0, 0, 0.42)";
+  context.fillStyle = `rgba(0, 0, 0, ${blackOpacity})`;
   context.fillRect(0, 0, window.innerWidth, window.innerHeight);
-  context.fillStyle = miniGameState.cupTablePhase === "johnLost" ? "#7cff7c" : "#ff3030";
-  context.shadowColor = miniGameState.cupTablePhase === "johnLost" ? "rgba(80, 255, 130, 0.78)" : "rgba(255, 48, 48, 0.78)";
+  context.globalAlpha *= textOpacity;
+  context.fillStyle = isJohnLost ? "#7cff7c" : "#ff3030";
+  context.shadowColor = isJohnLost ? "rgba(80, 255, 130, 0.78)" : "rgba(255, 48, 48, 0.78)";
   context.shadowBlur = 22;
   context.font = `900 ${Math.max(34, Math.min(72, window.innerHeight * 0.16))}px 'Courier New', monospace`;
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillText(
-    miniGameState.cupTablePhase === "johnLost" ? "JOHN DRANK YOUR CUP" : "JOHN WINS",
+    isJohnLost ? "JOHN DRANK YOUR CUP" : "JOHN WINS",
     window.innerWidth / 2,
     window.innerHeight / 2
   );
