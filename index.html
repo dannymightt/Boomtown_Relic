@@ -10,11 +10,48 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>The Lost Relic</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css?v=20260813-remove-wizard-question" />
   </head>
   <body>
     <main id="app" class="app" aria-label="The Lost Relic">
       <section class="scene loading-scene" data-scene="Loading" aria-labelledby="loading-title">
+        <div id="opening-disclaimer" class="opening-disclaimer">
+          <div class="opening-disclaimer__panel" role="dialog" aria-labelledby="opening-disclaimer-title">
+            <h1 id="opening-disclaimer-title">Disclaimer</h1>
+            <p>
+              This website is an independent, fan-made project created by Danny. It is not affiliated with,
+              endorsed by, sponsored by, or produced in partnership with Boomtown, Boomtown Fair, or any
+              associated crew, company, organiser, rights holder, or official representative.
+            </p>
+            <p>
+              References to Boomtown, including the project name Boomtown SideQuest and any use of the
+              word Boomtown within this experience, are included solely as references to the festival setting
+              that inspired this non-commercial fan project.
+            </p>
+            <p>
+              This project also includes selected imagery inspired by or sourced from Boomtown's public app
+              and map material for fan-reference purposes only. Those references are not used to imply
+              permission, endorsement, partnership, or official status.
+            </p>
+            <p>
+              No revenue, ownership, endorsement, official status, or commercial rights are claimed from
+              Boomtown or its intellectual property. All original code, characters, gameplay sequences, and
+              custom artwork created for this site are intended only as a personal creative project.
+            </p>
+            <button type="button" class="opening-disclaimer__continue" disabled>Click to continue</button>
+          </div>
+        </div>
+
+        <div id="orientation-warning" class="orientation-warning" hidden>
+          <p>
+            For the best experience, keep your phone horizontal once the game starts.
+          </p>
+          <p>
+            Rotating back to vertical mid-game can reset sections or cause visual glitches.
+          </p>
+          <p class="orientation-warning__continue">Click to continue</p>
+        </div>
+
         <div id="rotate-phone-message" class="rotate-phone-message" hidden>
           <p>
             Loading<span class="animated-ellipsis" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
@@ -22,16 +59,51 @@
           <p>Rotate your phone</p>
         </div>
 
-        <div id="wizard-question" class="wizard-question" hidden>
-          <p id="wizard-question-text">
-            Have you ever, in this life or a past life, interacted with what we know to be
-            <span>'The Retro Wizard'?</span>
-          </p>
-          <div class="wizard-question__choices" aria-labelledby="wizard-question-text">
-            <button type="button" data-wizard-answer="yes">yes</button>
-            <button type="button" data-wizard-answer="no">no</button>
+        <div id="chapter-select" class="chapter-select" hidden>
+          <div class="chapter-select__stars" aria-hidden="true">
+            <svg viewBox="0 0 640 180" preserveAspectRatio="xMidYMid meet">
+              <text x="320" y="108" text-anchor="middle">BOOMTOWN</text>
+              <path d="M54 132 L116 72 L180 118 L244 54 L318 106 L392 60 L458 118 L528 76 L594 132" />
+              <circle cx="54" cy="132" r="3" />
+              <circle cx="116" cy="72" r="3" />
+              <circle cx="180" cy="118" r="3" />
+              <circle cx="244" cy="54" r="3" />
+              <circle cx="318" cy="106" r="3" />
+              <circle cx="392" cy="60" r="3" />
+              <circle cx="458" cy="118" r="3" />
+              <circle cx="528" cy="76" r="3" />
+              <circle cx="594" cy="132" r="3" />
+            </svg>
           </div>
-          <p id="wizard-question-result" class="wizard-question__result" hidden>good luck</p>
+          <div class="chapter-select__tree" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="chapter-select__content">
+            <p class="chapter-select__kicker">Select chapter</p>
+            <div class="chapter-select__options">
+              <button type="button" class="chapter-select__option" data-chapter-target="start">
+                <span>Play from the Start</span>
+                <small>for players wanting to get the full experience and story</small>
+              </button>
+              <button type="button" class="chapter-select__option" data-chapter-target="chapter1">
+                <span>Chapter 1</span>
+                <small>Boomtown Space Invaders</small>
+              </button>
+              <button type="button" class="chapter-select__option" data-chapter-target="chapter2">
+                <span>Chapter 2</span>
+                <small>Meet Scatty John</small>
+              </button>
+              <button type="button" class="chapter-select__option" data-chapter-target="chapter3">
+                <span>Chapter 3</span>
+                <small>Boomtown's Call of Duty</small>
+              </button>
+              <button type="button" class="chapter-select__option" data-chapter-target="chapter4">
+                <span>Chapter 4</span>
+                <small>The Boss Fight</small>
+              </button>
+            </div>
+          </div>
+          <button type="button" class="chapter-select__play" disabled>Play</button>
         </div>
 
         <div class="terminal-panel" aria-live="polite" hidden>
@@ -67,14 +139,22 @@
           <div id="opening-tap-tutorial" class="opening-tap-tutorial" hidden>
             <div class="opening-tap-tutorial__arrow" aria-hidden="true"></div>
             <div class="opening-tap-tutorial__copy">
-              <p>Pop the bubble when the outer ring reaches the bubble's circumference</p>
+              <p>Wait. Pop the bubble only when the shrinking outer ring touches the bubble's edge.</p>
               <span>Press anywhere to continue</span>
             </div>
           </div>
+          <button id="opening-dog-skip" class="opening-dog-skip" type="button" hidden>Skip level</button>
           <div class="opening-wizard__runner"></div>
           <div class="opening-wizard__idle"></div>
           <div class="opening-wizard__path-runner"></div>
         </div>
+
+        <div id="final-challenge" class="final-challenge" hidden>
+          <p class="final-challenge__title">the final challenge</p>
+          <button type="button" class="final-challenge__play">Play</button>
+        </div>
+
+        <canvas id="final-fps-canvas" class="final-fps-canvas" aria-label="Final challenge shooter" hidden></canvas>
 
         <img
           id="wizard-hologram"
@@ -134,6 +214,6 @@
       </section>
     </main>
 
-    <script src="script.js" defer></script>
+    <script src="script.js?v=20260813-remove-wizard-question" defer></script>
   </body>
 </html>
