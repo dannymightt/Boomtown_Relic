@@ -4656,7 +4656,7 @@ function getMiniGameFailedButtons() {
       y: y - buttonHeight / 2,
       width: buttonWidth,
       height: buttonHeight,
-      disabled: miniGameState.failedRetryCount < 1,
+      disabled: false,
     },
   };
 }
@@ -17495,26 +17495,11 @@ function drawFailedMiniGameOverlay(context) {
 
   if (buttonsOpacity > 0) {
     const { retry, skip } = getMiniGameFailedButtons();
-    const canSkip = !skip.disabled;
 
     miniGameState.failedButtons = { retry, skip };
     context.globalAlpha = buttonsOpacity;
     drawFailedButton(context, retry, "Retry");
-    drawFailedButton(context, skip, "Skip level", canSkip ? "2/2" : "1/2");
-
-    if (!canSkip) {
-      const blink = 0.45 + Math.sin(performance.now() / 260) * 0.35;
-      context.globalAlpha = buttonsOpacity * blink;
-      context.shadowColor = "rgba(255, 255, 255, 0.35)";
-      context.shadowBlur = 8;
-      context.fillStyle = "#ffffff";
-      context.font = `bold ${Math.max(10, Math.min(14, window.innerHeight * 0.036))}px 'Courier New', monospace`;
-      context.fillText(
-        "Come on... give it one more try you got this",
-        centerX,
-        retry.y + retry.height + Math.max(20, window.innerHeight * 0.055)
-      );
-    }
+    drawFailedButton(context, skip, "Skip level");
   } else {
     miniGameState.failedButtons = getMiniGameFailedButtons();
   }
