@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>The Lost Relic</title>
-    <link rel="stylesheet" href="style.css?v=20260813-remove-wizard-question" />
+    <link rel="stylesheet" href="style.css?v=20260813-home-screen-tutorial" />
   </head>
   <body>
     <main id="app" class="app" aria-label="The Lost Relic">
@@ -39,6 +39,50 @@
               custom artwork created for this site are intended only as a personal creative project.
             </p>
             <button type="button" class="opening-disclaimer__continue" disabled>Click to continue</button>
+          </div>
+        </div>
+
+        <div id="home-screen-tutorial" class="home-screen-tutorial" hidden>
+          <div class="home-screen-tutorial__panel" role="dialog" aria-labelledby="home-screen-tutorial-title">
+            <p class="home-screen-tutorial__eyebrow">Optional iPhone setup</p>
+            <h1 id="home-screen-tutorial-title">Play without Safari tabs</h1>
+            <p class="home-screen-tutorial__intro">
+              For a bigger, app-style view, add the game to your Home Screen before playing.
+            </p>
+
+            <div class="home-screen-tutorial__steps">
+              <figure class="home-screen-step">
+                <svg class="home-screen-step__image" viewBox="0 0 220 174" role="img" aria-label="Tap Safari's Share button">
+                  <rect x="28" y="5" width="164" height="164" rx="25" fill="#12151b" stroke="#f5f5f5" stroke-width="4" />
+                  <rect x="39" y="17" width="142" height="139" rx="13" fill="#242a36" />
+                  <circle cx="110" cy="29" r="4" fill="#626b7c" />
+                  <path d="M39 124h142v19c0 7-5 13-12 13H51c-7 0-12-6-12-13z" fill="#edf0f5" />
+                  <path d="M110 145v-23M101 131l9-9 9 9" fill="none" stroke="#147ce5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                  <rect x="98" y="130" width="24" height="20" rx="3" fill="none" stroke="#147ce5" stroke-width="3" />
+                  <circle cx="110" cy="137" r="22" fill="none" stroke="#ffd84d" stroke-width="4" stroke-dasharray="5 5" />
+                  <path d="M61 42h98M61 55h72M61 68h86" stroke="#7c879c" stroke-width="6" stroke-linecap="round" />
+                </svg>
+                <figcaption><strong>1. Tap Share</strong><span>Use the square-and-arrow button in Safari.</span></figcaption>
+              </figure>
+
+              <figure class="home-screen-step">
+                <svg class="home-screen-step__image" viewBox="0 0 220 174" role="img" aria-label="Choose Add to Home Screen">
+                  <rect x="28" y="5" width="164" height="164" rx="25" fill="#12151b" stroke="#f5f5f5" stroke-width="4" />
+                  <rect x="39" y="17" width="142" height="139" rx="13" fill="#252a34" />
+                  <path d="M52 49h116M52 83h116M52 117h116" stroke="#555e6f" stroke-width="2" />
+                  <rect x="46" y="58" width="128" height="48" rx="9" fill="#f0f2f6" stroke="#ffd84d" stroke-width="4" />
+                  <rect x="56" y="69" width="24" height="24" rx="5" fill="#ffffff" stroke="#147ce5" stroke-width="3" />
+                  <path d="M68 74v14M61 81h14" stroke="#147ce5" stroke-width="3" stroke-linecap="round" />
+                  <text x="88" y="78" fill="#101319" font-family="Arial, sans-serif" font-size="10" font-weight="700">Add to</text>
+                  <text x="88" y="92" fill="#101319" font-family="Arial, sans-serif" font-size="10" font-weight="700">Home Screen</text>
+                  <path d="M156 76l7 6-7 6" fill="none" stroke="#747d8d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <figcaption><strong>2. Add to Home Screen</strong><span>Then open the new game icon to play.</span></figcaption>
+              </figure>
+            </div>
+
+            <p class="home-screen-tutorial__note">Totally optional — you can continue playing in Safari.</p>
+            <button type="button" class="home-screen-tutorial__continue" disabled>Click to continue</button>
           </div>
         </div>
 
@@ -104,6 +148,19 @@
             </div>
           </div>
           <button type="button" class="chapter-select__play" disabled>Play</button>
+          <a id="chapter-about-link" class="chapter-about" href="about.html" aria-label="Open the About Me page">
+            <span class="chapter-about__notes" aria-hidden="true">
+              <span>&#9834;</span>
+              <span>&#9835;</span>
+              <span>&#9834;</span>
+              <span>&#9835;</span>
+            </span>
+            <span class="chapter-about__label">
+              <span class="chapter-about__kicker">Bonus chapter</span>
+              <strong>About Me</strong>
+              <small>My story &amp; original music</small>
+            </span>
+          </a>
         </div>
 
         <div class="terminal-panel" aria-live="polite" hidden>
@@ -139,7 +196,7 @@
           <div id="opening-tap-tutorial" class="opening-tap-tutorial" hidden>
             <div class="opening-tap-tutorial__arrow" aria-hidden="true"></div>
             <div class="opening-tap-tutorial__copy">
-              <p>Wait. Pop the bubble only when the shrinking outer ring touches the bubble's edge.</p>
+              <p>Wait. Pop the bubble only when the shrinking outer ring touches the bubble's edge. Tapping too early or too late fails.</p>
               <span>Press anywhere to continue</span>
             </div>
           </div>
@@ -214,6 +271,13 @@
       </section>
     </main>
 
-    <script src="script.js?v=20260813-remove-wizard-question" defer></script>
+    <div
+      id="final-game-ending"
+      class="final-game-ending"
+      aria-hidden="true"
+      hidden
+    ></div>
+
+    <script src="script.js?v=20260813-final-retry-fixes" defer></script>
   </body>
 </html>

@@ -190,8 +190,12 @@ const FINAL_FPS_PARTY_GOBLIN_TUTORIAL_LOCK_MS = 2000;
 const FINAL_FPS_PARTY_GOBLIN_DEATH_MS = 1000;
 const FINAL_FPS_PARTY_GOBLIN_HEALTH = 5;
 const FINAL_FPS_PARTY_GOBLIN_TOUCH_DISTANCE = 0.48;
-const FINAL_FPS_CORRIDOR_FOREST_TRIGGER_Y = -50;
+const FINAL_FPS_CORRIDOR_FOREST_TRIGGER_Y = -25;
 const FINAL_FPS_FOREST_TRANSITION_MS = 1800;
+const FINAL_FPS_BOSS_OUTRO_HOLD_MS = 3400;
+const FINAL_FPS_BOSS_OUTRO_FADE_MS = 900;
+const FINAL_FPS_ENDING_BLACK_HOLD_MS = 450;
+const FINAL_FPS_ENDING_PAGE_URL = "about.html?from=game-ending";
 const FINAL_FPS_FOREST_PATH_HALF_WIDTH = 0.78;
 const FINAL_FPS_FOREST_WALK_LIMIT = 2.9;
 const FINAL_FPS_FOREST_VIEW_DISTANCE = 48;
@@ -587,6 +591,9 @@ const finalFpsState = {
   forestBossDialogue: null,
   forestBossOutroStartedAt: 0,
   forestBossOutroFadeStartedAt: 0,
+  forestBossOutroNavigationStarted: false,
+  forestBossOutroTimer: null,
+  forestBossOutroNavigationTimer: null,
   forestBossRockets: [],
   forestBossMuzzleBursts: [],
   forestBossLandingBursts: [],
@@ -2490,6 +2497,10 @@ function failOpeningPathChallenge() {
   }
 
   window.setTimeout(() => {
+    if (!loadingState.pathChallengeFailed) {
+      return;
+    }
+
     restartOpeningPathChallenge();
   }, OPENING_PATH_FAIL_RESTART_MS);
 }
@@ -2559,6 +2570,9 @@ async function restartOpeningPathChallenge() {
     return;
   }
 
+  // A failed first bubble round should teach the timing again on Retry.
+  // Skip level clears pathChallengeFailed, so it never reaches this reset.
+  loadingState.tapBubbleTutorialSeen = false;
   await playOpeningRestartDialogue();
   scheduleOpeningTravelHudSequence(OPENING_TRAVEL_HUD_AFTER_TUTORIAL_MS, { playDialogue: false });
 }
@@ -2926,7 +2940,8 @@ function showOpeningTapBubble() {
     bubble.classList.add("is-visible", "is-tutorial-target");
     tutorial.classList.remove("is-visible", "is-left", "is-right");
     tutorial.classList.add(bubbleSide);
-    tutorialText.textContent = "Wait first. Pop the bubble only when the shrinking outer ring reaches the bubble's edge. Early taps fail.";
+    tutorialText.textContent =
+      "Wait first. Pop the bubble only when the shrinking outer ring reaches the bubble's edge. Tap too early or too late and the round fails.";
     tutorialPrompt.textContent = "Press anywhere to continue";
     tutorialPrompt.hidden = false;
     showElement(tutorial);
@@ -3462,6 +3477,7 @@ async function playChapterSelectSequence() {
   const chapterSelect = document.querySelector("#chapter-select");
   const options = [...document.querySelectorAll(".chapter-select__option")];
   const playButton = chapterSelect?.querySelector(".chapter-select__play");
+  const aboutLink = chapterSelect?.querySelector("#chapter-about-link");
 
   if (!chapterSelect || !playButton || options.length === 0) {
     await startSelectedChapter("start");
@@ -3558,6 +3574,23 @@ async function playChapterSelectSequence() {
   playButton.onclick = startSelectedChapterFromMenu;
   playButton.onpointerdown = startSelectedChapterFromMenu;
   playButton.ontouchstart = startSelectedChapterFromMenu;
+
+  if (aboutLink) {
+    aboutLink.onclick = (event) => {
+      event.preventDefault();
+      if (aboutLink.dataset.opening === "true") {
+        return;
+      }
+
+      aboutLink.dataset.opening = "true";
+      unlockAllGameAudio().catch(() => {});
+      playSoundEffect("menuStart", { minGap: 120, volume: 0.7 });
+      setFinalFpsMusic(null);
+      window.setTimeout(() => {
+        window.location.assign(aboutLink.href);
+      }, 140);
+    };
+  }
 }
 
 async function startSelectedChapter(target) {
@@ -4104,7 +4137,8 @@ function startMiniGame() {
     miniGameState.startedAt + MINI_GAME_FROG_EVENT_START_MS + Math.random() * 6000;
   miniGameState.frogSpawnCount = 0;
   miniGameState.gameplayFadeStartedAt = miniGameState.preludeStartedAt + 11200;
-  miniGameState.wizardTipStartedAt = miniGameState.lastFrameTime + MINI_GAME_WIZARD_TIP_DELAY_MS;
+  miniGameState.wizardTipStartedAt =
+    miniGameState.failedRetryCount > 0 ? 0 : miniGameState.lastFrameTime + MINI_GAME_WIZARD_TIP_DELAY_MS;
   miniGameState.wizardTipTypingActive = false;
   miniGameState.lastFireTime = -MINI_GAME_FIRE_COOLDOWN_MS;
   miniGameState.goldenAppleSpawnTimes = createGoldenAppleSpawnTimes(miniGameState.startedAt);
@@ -6458,6 +6492,8 @@ function startFinalFpsChallenge(options = {}) {
     return;
   }
 
+  resetFinalFpsEndingHandoff();
+
   if (finalFpsState.animationFrame) {
     window.cancelAnimationFrame(finalFpsState.animationFrame);
   }
@@ -6530,6 +6566,7 @@ function startFinalFpsChallenge(options = {}) {
   finalFpsState.forestBossDialogue = null;
   finalFpsState.forestBossOutroStartedAt = 0;
   finalFpsState.forestBossOutroFadeStartedAt = 0;
+  finalFpsState.forestBossOutroNavigationStarted = false;
   clearFinalFpsForestBossRuntime();
   finalFpsState.forestBossDodgePromptSeen = false;
   finalFpsState.forestComboKills = 0;
@@ -6622,6 +6659,8 @@ function startFinalFpsChallenge(options = {}) {
 
 function stopFinalFpsChallenge() {
   const canvas = finalFpsState.canvas || document.querySelector("#final-fps-canvas");
+
+  resetFinalFpsEndingHandoff();
 
   if (finalFpsState.animationFrame) {
     window.cancelAnimationFrame(finalFpsState.animationFrame);
@@ -7109,6 +7148,7 @@ function resetFinalFpsForestBossAfterFailure(timestamp) {
   finalFpsState.forestBossDialogue = null;
   finalFpsState.forestBossOutroStartedAt = 0;
   finalFpsState.forestBossOutroFadeStartedAt = 0;
+  finalFpsState.forestBossOutroNavigationStarted = false;
   clearFinalFpsForestBossRuntime({ keepShockwaveTutorial: true });
   finalFpsState.forestBossCheckpointPhase = checkpointPhase;
   finalFpsState.forestBoss = createFinalFpsForestBoss(timestamp, {
@@ -7183,6 +7223,7 @@ function skipFinalFpsForestRunToBoss(timestamp) {
   finalFpsState.forestBossDialogue = null;
   finalFpsState.forestBossOutroStartedAt = 0;
   finalFpsState.forestBossOutroFadeStartedAt = 0;
+  finalFpsState.forestBossOutroNavigationStarted = false;
   finalFpsState.partyGoblins = [];
   finalFpsState.partyGoblinBursts = [];
   finalFpsState.forestChaosActive = false;
@@ -7228,6 +7269,7 @@ function startFinalFpsForestBossOutro(timestamp) {
 
   finalFpsState.forestBossOutroStartedAt = timestamp;
   finalFpsState.forestBossOutroFadeStartedAt = 0;
+  finalFpsState.forestBossOutroNavigationStarted = false;
   showFinalFpsForestBossDialogue("WOO, OFF TO BOOMTOWN WE GO.", timestamp, 3000);
   finalFpsState.keys.forward = 0;
   finalFpsState.keys.strafe = 0;
@@ -7236,6 +7278,68 @@ function startFinalFpsForestBossOutro(timestamp) {
   finalFpsState.isShooting = false;
   finalFpsState.shootButtonPressed = false;
   finalFpsState.shootPointerId = null;
+
+  // This timer deliberately lives outside the canvas animation loop. On some
+  // mobile browsers the final rendered frame can stall after the boss dies;
+  // the ending must still cover the game and open the About page.
+  finalFpsState.forestBossOutroTimer = window.setTimeout(
+    beginFinalFpsEndingHandoff,
+    FINAL_FPS_BOSS_OUTRO_HOLD_MS
+  );
+}
+
+function resetFinalFpsEndingHandoff() {
+  if (finalFpsState.forestBossOutroTimer) {
+    window.clearTimeout(finalFpsState.forestBossOutroTimer);
+    finalFpsState.forestBossOutroTimer = null;
+  }
+
+  if (finalFpsState.forestBossOutroNavigationTimer) {
+    window.clearTimeout(finalFpsState.forestBossOutroNavigationTimer);
+    finalFpsState.forestBossOutroNavigationTimer = null;
+  }
+
+  const endingOverlay = document.querySelector("#final-game-ending");
+  if (endingOverlay) {
+    endingOverlay.classList.remove("is-visible");
+    endingOverlay.hidden = true;
+    endingOverlay.setAttribute("aria-hidden", "true");
+  }
+}
+
+function beginFinalFpsEndingHandoff() {
+  if (finalFpsState.forestBossOutroNavigationStarted) {
+    return;
+  }
+
+  finalFpsState.forestBossOutroNavigationStarted = true;
+  finalFpsState.forestBossOutroTimer = null;
+  finalFpsState.forestBossOutroFadeStartedAt = performance.now();
+  finalFpsState.forestBossDialogue = null;
+  finalFpsState.keys.forward = 0;
+  finalFpsState.keys.strafe = 0;
+  finalFpsState.joystick.active = false;
+  finalFpsState.look.active = false;
+  finalFpsState.isShooting = false;
+  finalFpsState.shootButtonPressed = false;
+  finalFpsState.shootPointerId = null;
+  setFinalFpsMusic(null);
+  setFinalFpsAmbience(null);
+  stopTypingSound();
+
+  const endingOverlay = document.querySelector("#final-game-ending");
+  if (endingOverlay) {
+    endingOverlay.hidden = false;
+    endingOverlay.setAttribute("aria-hidden", "false");
+    // Force the transparent starting frame to be committed before fading in.
+    void endingOverlay.offsetWidth;
+    endingOverlay.classList.add("is-visible");
+  }
+
+  finalFpsState.forestBossOutroNavigationTimer = window.setTimeout(() => {
+    finalFpsState.forestBossOutroNavigationTimer = null;
+    window.location.assign(FINAL_FPS_ENDING_PAGE_URL);
+  }, FINAL_FPS_BOSS_OUTRO_FADE_MS + FINAL_FPS_ENDING_BLACK_HOLD_MS);
 }
 
 function resetFinalFpsForestIntroAfterFailure(timestamp) {
@@ -7467,9 +7571,12 @@ function updateFinalFpsForestBossOutro(timestamp) {
   finalFpsState.shootButtonPressed = false;
   finalFpsState.shootPointerId = null;
 
-  if (!finalFpsState.forestBossOutroFadeStartedAt && timestamp - finalFpsState.forestBossOutroStartedAt >= 3400) {
-    finalFpsState.forestBossOutroFadeStartedAt = timestamp;
-    finalFpsState.forestBossDialogue = null;
+  // Animation-loop fallback for browsers that throttle ordinary timers.
+  if (
+    !finalFpsState.forestBossOutroNavigationStarted &&
+    timestamp - finalFpsState.forestBossOutroStartedAt >= FINAL_FPS_BOSS_OUTRO_HOLD_MS
+  ) {
+    beginFinalFpsEndingHandoff();
   }
 }
 
@@ -9137,7 +9244,7 @@ function drawFinalFpsForestBossOutroFade(context, width, height, timestamp) {
     return;
   }
 
-  const progress = Math.min(1, (timestamp - finalFpsState.forestBossOutroFadeStartedAt) / 1100);
+  const progress = Math.min(1, (timestamp - finalFpsState.forestBossOutroFadeStartedAt) / FINAL_FPS_BOSS_OUTRO_FADE_MS);
   context.save();
   context.globalAlpha = easeInOutCubic(progress);
   context.fillStyle = "#000000";
@@ -18911,6 +19018,8 @@ async function prepareLoadingScene() {
   const terminalPanel = document.querySelector(".terminal-panel");
   const openingDisclaimer = document.querySelector("#opening-disclaimer");
   const openingDisclaimerContinue = openingDisclaimer?.querySelector(".opening-disclaimer__continue");
+  const homeScreenTutorial = document.querySelector("#home-screen-tutorial");
+  const homeScreenTutorialContinue = homeScreenTutorial?.querySelector(".home-screen-tutorial__continue");
   const orientationWarning = document.querySelector("#orientation-warning");
   const rotateMessage = document.querySelector("#rotate-phone-message");
   const transmissionMessage = document.querySelector("#transmission-message");
@@ -18927,6 +19036,8 @@ async function prepareLoadingScene() {
     !terminalPanel ||
     !openingDisclaimer ||
     !openingDisclaimerContinue ||
+    !homeScreenTutorial ||
+    !homeScreenTutorialContinue ||
     !orientationWarning ||
     !rotateMessage ||
     !transmissionMessage ||
@@ -18947,6 +19058,7 @@ async function prepareLoadingScene() {
   openingDisclaimerContinue.disabled = true;
   openingDisclaimerContinue.classList.remove("is-ready");
   hideElement(terminalPanel);
+  hideElement(homeScreenTutorial);
   hideElement(orientationWarning);
   hideElement(rotateMessage);
   hideElement(transmissionMessage);
@@ -19014,7 +19126,40 @@ async function prepareLoadingScene() {
     await wait(420);
     hideElement(orientationWarning);
     orientationWarning.classList.remove("is-fading");
+    loadingState.disclaimerAccepted = true;
     runAfterDisclaimer();
+  };
+
+  const showHomeScreenTutorial = async () => {
+    showElement(homeScreenTutorial);
+    homeScreenTutorial.classList.remove("is-fading");
+    homeScreenTutorialContinue.disabled = false;
+    homeScreenTutorialContinue.classList.add("is-ready");
+
+    await new Promise((resolve) => {
+      let finished = false;
+
+      const continueFromTutorial = (event) => {
+        event?.preventDefault?.();
+
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+        homeScreenTutorial.removeEventListener("pointerdown", continueFromTutorial);
+        homeScreenTutorial.removeEventListener("touchstart", continueFromTutorial);
+        resolve();
+      };
+
+      homeScreenTutorial.addEventListener("pointerdown", continueFromTutorial);
+      homeScreenTutorial.addEventListener("touchstart", continueFromTutorial, { passive: false });
+    });
+
+    homeScreenTutorial.classList.add("is-fading");
+    await wait(420);
+    hideElement(homeScreenTutorial);
+    homeScreenTutorial.classList.remove("is-fading");
   };
 
   window.setTimeout(() => {
@@ -19036,10 +19181,10 @@ async function prepareLoadingScene() {
     openingDisclaimer.dataset.accepting = "true";
     unlockAllGameAudio().catch(() => {});
     playSoundEffect("menuStart", { minGap: 120, volume: 0.72 });
-    loadingState.disclaimerAccepted = true;
     openingDisclaimer.classList.add("is-fading");
     await wait(420);
     hideElement(openingDisclaimer);
+    await showHomeScreenTutorial();
     await showOrientationWarning();
     openingDisclaimer.dataset.accepting = "false";
   };
